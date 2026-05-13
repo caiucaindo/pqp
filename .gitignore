@@ -1,5 +1,50 @@
-node_modules/
+docs/
+ 
+# Build outputs
 dist/
+build/
+*.egg-info/
+
+# Virtual environments
 .venv/
 venv/
-.env/
+env/
+ENV/
+
+# Node
+app/node_modules/
+app/dist/
+
+# Python
+__pycache__/
+*.py[cod]*
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
