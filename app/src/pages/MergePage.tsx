@@ -289,9 +289,9 @@ export default function MergePage() {
 
   /* ── render ──────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="min-h-screen bg-background text-foreground font-sans">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <header className="border-b border-zinc-800 sticky top-0 z-10 backdrop-blur">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="bg-indigo-600 p-1.5 rounded-lg">
@@ -304,14 +304,14 @@ export default function MergePage() {
               variant="ghost"
               size="sm"
               onClick={() => navigate('/editor')}
-              className="text-slate-500 hover:text-indigo-600 gap-1"
+              className="text-zinc-400 hover:text-indigo-400 gap-1"
             >
               <Pencil className="w-4 h-4" />
               <span className="text-xs">Editor</span>
             </Button>
             {files.length > 0 && (
               <>
-                <span className="text-sm text-slate-500">{files.length} arquivo(s)</span>
+                <span className="text-sm text-zinc-400">{files.length} arquivo(s)</span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -336,8 +336,8 @@ export default function MergePage() {
           className={cn(
             'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200',
             isDragging
-              ? 'border-indigo-500 bg-indigo-50 scale-[1.02]'
-              : 'border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50'
+              ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
+              : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/60'
           )}
         >
           <input
@@ -352,21 +352,21 @@ export default function MergePage() {
             <div
               className={cn(
                 'p-3 rounded-full transition-colors',
-                isDragging ? 'bg-indigo-100' : 'bg-slate-100'
+                isDragging ? 'bg-indigo-500/20' : 'bg-zinc-800'
               )}
             >
               <Upload
                 className={cn(
                   'w-8 h-8 transition-colors',
-                  isDragging ? 'text-indigo-600' : 'text-slate-400'
+                  isDragging ? 'text-indigo-300' : 'text-zinc-400'
                 )}
               />
             </div>
             <div>
-              <p className="text-base font-medium text-slate-700">
+              <p className="text-base font-medium text-zinc-200">
                 {isDragging ? 'Solte os PDFs aqui' : 'Arraste PDFs ou clique para escolher'}
               </p>
-              <p className="text-sm text-slate-400 mt-1">Aceita múltiplos arquivos PDF</p>
+              <p className="text-sm text-zinc-500 mt-1">Aceita múltiplos arquivos PDF</p>
             </div>
           </div>
         </div>
@@ -375,10 +375,10 @@ export default function MergePage() {
         {files.length > 0 && (
           <div className="mt-8 space-y-3">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+              <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider">
                 Arquivos
               </h2>
-              <p className="text-xs text-slate-400">Arraste para reordenar</p>
+              <p className="text-xs text-zinc-500">Arraste para reordenar</p>
             </div>
 
             {files.map((pdfFile, index) => (
@@ -398,7 +398,7 @@ export default function MergePage() {
               >
                 <CardContent className="p-3 flex items-center gap-3">
                   {/* Drag handle */}
-                  <div className="text-slate-300 hover:text-slate-500">
+                  <div className="text-zinc-600 hover:text-zinc-400">
                     <GripVertical className="w-4 h-4" />
                   </div>
 
@@ -406,7 +406,7 @@ export default function MergePage() {
                   <div className="shrink-0 relative">
                     <div
                       className={cn(
-                        'w-24 h-32 rounded-lg border border-slate-200 bg-white overflow-hidden flex items-center justify-center transition-transform duration-300',
+                        'w-24 h-32 rounded-lg border border-zinc-800 bg-zinc-950 overflow-hidden flex items-center justify-center transition-transform duration-300',
                         pdfFile.rotation === 90 && 'rotate-90',
                         pdfFile.rotation === 180 && 'rotate-180',
                         pdfFile.rotation === 270 && '-rotate-90'
@@ -420,7 +420,7 @@ export default function MergePage() {
                           draggable={false}
                         />
                       ) : (
-                        <div className="flex flex-col items-center gap-1 text-slate-300">
+                        <div className="flex flex-col items-center gap-1 text-zinc-500">
                           <Loader2 className="w-5 h-5 animate-spin" />
                           <span className="text-[10px]">Carregando…</span>
                         </div>
@@ -434,8 +434,8 @@ export default function MergePage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">{pdfFile.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-sm font-medium text-zinc-200 truncate">{pdfFile.name}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
                       {pdfFile.size}
                       {pdfFile.pageCount ? ` • ${pdfFile.pageCount} pág.` : ''}
                     </p>
@@ -443,7 +443,7 @@ export default function MergePage() {
 
                   {/* Rotation controls */}
                   <div className="flex items-center gap-1">
-                    <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
+                    <div className="flex items-center bg-zinc-800 rounded-lg p-0.5 border border-zinc-700">
                       {[0, 90, 180, 270].map((deg) => (
                         <button
                           key={deg}
@@ -451,8 +451,8 @@ export default function MergePage() {
                           className={cn(
                             'px-2 py-1 text-xs font-medium rounded-md transition-colors',
                             pdfFile.rotation === deg
-                              ? 'bg-white text-indigo-600 shadow-sm'
-                              : 'text-slate-500 hover:text-slate-700'
+                              ? 'bg-zinc-950 text-indigo-300 shadow-sm'
+                              : 'text-zinc-400 hover:text-zinc-200'
                           )}
                         >
                           {rotationLabel(deg)}
@@ -463,7 +463,7 @@ export default function MergePage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => rotateFile(pdfFile.id, 'ccw')}
-                      className="text-slate-400 hover:text-indigo-600"
+                      className="text-zinc-500 hover:text-indigo-400"
                       title="Girar 90° anti-horário"
                     >
                       <RotateCcw className="w-4 h-4" />
@@ -472,7 +472,7 @@ export default function MergePage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => rotateFile(pdfFile.id, 'cw')}
-                      className="text-slate-400 hover:text-indigo-600"
+                      className="text-zinc-500 hover:text-indigo-400"
                       title="Girar 90° horário"
                     >
                       <RotateCw className="w-4 h-4" />
@@ -484,14 +484,14 @@ export default function MergePage() {
                     <button
                       onClick={() => moveFile(index, 'up')}
                       disabled={index === 0}
-                      className="text-slate-300 hover:text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="text-zinc-600 hover:text-zinc-400 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <ArrowUp className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => moveFile(index, 'down')}
                       disabled={index === files.length - 1}
-                      className="text-slate-300 hover:text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="text-zinc-600 hover:text-zinc-400 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <ArrowDown className="w-3.5 h-3.5" />
                     </button>
@@ -502,7 +502,7 @@ export default function MergePage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => downloadSingle(pdfFile)}
-                    className="text-slate-300 hover:text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-zinc-600 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Baixar PDF rotacionado"
                   >
                     <Download className="w-4 h-4" />
@@ -513,7 +513,7 @@ export default function MergePage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => removeFile(pdfFile.id)}
-                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -525,13 +525,13 @@ export default function MergePage() {
             {files.length >= 1 && (
               <div className="pt-4 flex flex-col items-center gap-4">
                 {/* Standardize toggle */}
-                <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 shadow-sm">
                   <div className="p-2 bg-indigo-50 rounded-lg">
                     <Settings2 className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-700">Padronizar tamanho A4</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-sm font-medium text-zinc-200">Padronizar tamanho A4</p>
+                    <p className="text-xs text-zinc-500">
                       Todas as páginas sairão no formato A4, centralizadas e proporcionais
                     </p>
                   </div>

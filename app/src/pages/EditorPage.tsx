@@ -567,26 +567,26 @@ export default function EditorPage() {
 
   return (
     <div
-      className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col"
+      className="min-h-screen bg-background text-foreground font-sans flex flex-col"
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDrop={handleRootDrop}
     >
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <header className="border-b border-zinc-800 sticky top-0 z-10 backdrop-blur">
         <div className="max-w-[1400px] mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate('/')}
-              className="text-slate-500 hover:text-indigo-600 gap-1"
+              className="text-zinc-400 hover:text-indigo-400 gap-1"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="text-xs">Voltar</span>
             </Button>
-            <div className="w-px h-6 bg-slate-200" />
+            <div className="w-px h-6 bg-zinc-800" />
             <div className="flex items-center gap-2">
               <div className="bg-emerald-600 p-1.5 rounded-lg">
                 <PenLine className="w-5 h-5 text-white" />
@@ -598,7 +598,7 @@ export default function EditorPage() {
           <div className="flex items-center gap-2">
             {pdfDoc && (
               <>
-                <span className="text-sm text-slate-500">
+                <span className="text-sm text-zinc-400">
                   Página {currentPage} / {pageCount}
                 </span>
                 {placedImages.length > 0 && (
@@ -625,7 +625,7 @@ export default function EditorPage() {
       {/* Main content */}
       <div className="flex-1 flex max-w-[1400px] mx-auto w-full">
         {/* Sidebar */}
-        <aside className="w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-4">
+        <aside className="w-64 bg-zinc-900/80 border-r border-zinc-800 p-4 flex flex-col gap-4">
           {/* Upload PDF */}
           <div>
             <input
@@ -650,7 +650,7 @@ export default function EditorPage() {
 
           {pdfDoc && (
             <>
-              <div className="w-full h-px bg-slate-200" />
+              <div className="w-full h-px bg-zinc-800" />
 
               {/* Page navigation */}
               {pageCount > 1 && (
@@ -663,7 +663,7 @@ export default function EditorPage() {
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </Button>
-                  <span className="text-sm text-slate-600">
+                  <span className="text-sm text-zinc-300">
                     {currentPage} / {pageCount}
                   </span>
                   <Button
@@ -688,7 +688,7 @@ export default function EditorPage() {
                 />
                 <Button
                   variant="outline"
-                  className="w-full gap-2 border-dashed border-2 hover:border-emerald-400 hover:text-emerald-600"
+                          className="w-full gap-2 border-dashed border-2 border-zinc-700 hover:border-emerald-400 hover:text-emerald-400"
                   onClick={() => imgInputRef.current?.click()}
                 >
                   <ImagePlus className="w-4 h-4" />
@@ -705,7 +705,7 @@ export default function EditorPage() {
                 >
                   <ZoomOut className="w-4 h-4" />
                 </Button>
-                <span className="text-xs text-slate-500">{Math.round(zoom * 100)}%</span>
+                <span className="text-xs text-zinc-400">{Math.round(zoom * 100)}%</span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -720,7 +720,7 @@ export default function EditorPage() {
               {/* Selected image controls */}
               {selectedImageId && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                     Imagem Selecionada
                   </p>
 
@@ -753,7 +753,7 @@ export default function EditorPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="w-full gap-1 text-red-500 hover:text-red-600 hover:bg-red-50"
+                          className="w-full gap-1 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                           onClick={() => removeImage(img.id)}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -768,7 +768,7 @@ export default function EditorPage() {
               {/* Images list */}
               {placedImages.length > 0 && (
                 <div className="space-y-1 flex-1 overflow-auto">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                     Camadas ({placedImages.length})
                   </p>
                   {placedImages.map((img, idx) => (
@@ -778,14 +778,14 @@ export default function EditorPage() {
                       className={cn(
                         'flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors text-xs',
                         selectedImageId === img.id
-                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                          : 'hover:bg-slate-50 text-slate-600 border border-transparent'
+                          ? 'bg-indigo-500/15 text-indigo-200 border border-indigo-500/30'
+                          : 'hover:bg-zinc-800 text-zinc-300 border border-transparent'
                       )}
                     >
                       <img
                         src={img.src}
                         alt=""
-                        className="w-8 h-8 rounded object-cover border border-slate-200"
+                        className="w-8 h-8 rounded object-cover border border-zinc-700"
                       />
                       <span className="truncate flex-1">Imagem {idx + 1}</span>
                       {img.confirmed ? (
@@ -802,7 +802,7 @@ export default function EditorPage() {
         </aside>
 
         {/* Canvas area */}
-        <main className="flex-1 bg-slate-100 overflow-auto flex items-start justify-center p-8 relative">
+        <main className="flex-1 bg-background overflow-auto flex items-start justify-center p-8 relative">
           {isDraggingFile && (
             <div className="absolute inset-0 z-20 m-4 rounded-2xl border-2 border-dashed border-indigo-400 bg-indigo-50/80 backdrop-blur-sm flex items-center justify-center text-indigo-700 pointer-events-none">
               <div className="text-center">
@@ -812,19 +812,19 @@ export default function EditorPage() {
             </div>
           )}
           {!pdfDoc ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-400">
+            <div className="flex flex-col items-center justify-center h-full text-zinc-400">
               <FileText className="w-16 h-16 mb-4 opacity-30" />
-              <p className="text-base font-medium text-slate-500">
+              <p className="text-base font-medium text-zinc-300">
                 Carregue um PDF para começar a editar
               </p>
-              <p className="text-sm text-slate-400 mt-1">
+              <p className="text-sm text-zinc-500 mt-1">
                 Adicione imagens, posicione e salve
               </p>
             </div>
           ) : (
             <div
               ref={containerRef}
-              className="shadow-2xl rounded-lg overflow-hidden bg-white"
+              className="shadow-2xl rounded-lg overflow-hidden ring-1 ring-zinc-800"
               style={{
                 transform: `scale(${zoom})`,
                 transformOrigin: 'top center',
