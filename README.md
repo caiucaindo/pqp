@@ -1,4 +1,5 @@
-# ✨ PDP - PRA EDITAR PDF
+# ✨ PQP
+## PDF Que Pariu
 
 Uma aplicação desktop para editar PDFs.
 
