@@ -44,7 +44,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='PDF Editor',
+    name='PQP',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

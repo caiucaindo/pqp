@@ -1,25 +1,21 @@
-$ErrorActionPreference = "Stop"
+Write-Host "[desktop/build.ps1] Starting build..."
 
-Write-Host "[desktop/build.ps1] Starting build..." -ForegroundColor Cyan
+# Root do projeto
+$root = Resolve-Path "$PSScriptRoot\.."
 
-try {
-    # Activate venv from repo root
-    Write-Host "Activating virtual environment..." -ForegroundColor Yellow
-    & "..\.venv\Scripts\Activate.ps1"
+Write-Host "Activating virtual environment..."
+& "$root\.venv\Scripts\Activate.ps1"
 
-    # Build frontend
-    Write-Host "Building frontend (app)..." -ForegroundColor Yellow
-    Set-Location ..\app
-    npm run build
-    Set-Location ..\
+Set-Location "$root\app"
 
-    # Build executable
-    Write-Host "Building executable with PyInstaller..." -ForegroundColor Yellow
-    pyinstaller desktop\build.spec --noconfirm
-
-    Write-Host "Build complete." -ForegroundColor Green
-}
-catch {
-    Write-Host "Build failed: $_" -ForegroundColor Red
+npm run build
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Frontend build failed"
     exit 1
 }
+
+Set-Location $root
+
+pyinstaller desktop\build.spec --noconfirm
+
+Write-Host "Build finished"

@@ -1,4 +1,5 @@
 # ✨ PQP
+
 ## PDF Que Pariu
 
 Uma aplicação desktop para editar PDFs.
@@ -15,7 +16,7 @@ Uma aplicação desktop para editar PDFs.
 
 ## Usuário Final (Windows)
 
-1. Baixe `PDF Editor.exe` da seção [Releases](../../releases)
+1. Baixe `PQP.exe` da seção [Releases](../../releases)
 2. Execute o arquivo
 3. Pronto! A aplicação abre automaticamente
 
@@ -89,7 +90,7 @@ pyinstaller desktop\build.spec --noconfirm
 O executável estará em:
 
 ```
-dist/PDF Editor.exe
+dist/PQP.exe
 ```
 
 ## Modo Desenvolvimento

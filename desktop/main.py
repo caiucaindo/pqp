@@ -1,5 +1,5 @@
 """
-PDF Editor - desktop entry
+PQP - PDF Que Pariu - desktop entry
 Moved into `desktop/` folder; resolves frontend path relative to repo root.
 """
 import os
@@ -18,7 +18,10 @@ app_root = Path(getattr(sys, '_MEIPASS', Path(__file__).parent.parent))
 frontend_dist = app_root / 'app' / 'dist'
 
 # Create FastAPI app
-app = FastAPI(title="PDF Editor")
+app = FastAPI(
+    title="PQP - PDF Que Pariu",
+    description="Editor de PDF simples, rápido e sem frescura."
+)
 
 # Mount static files (frontend)
 if frontend_dist.exists():
@@ -29,11 +32,11 @@ async def root():
     index_file = frontend_dist / 'index.html'
     if index_file.exists():
         return FileResponse(index_file)
-    return {'message': 'PDF Editor - Frontend not found'}
+    return {'message': 'PQP frontend not found'}
 
 @app.get('/api/health')
 async def health():
-    return {'status': 'ok', 'app': 'PDF Editor'}
+    return {'status': 'ok', 'app': 'PQP'}
 
 @app.get('/{full_path:path}')
 async def serve_frontend(full_path: str):
@@ -62,7 +65,7 @@ def main():
     server_thread.start()
     import time
     time.sleep(1)
-    webview.create_window(title='PDF Editor', url='http://127.0.0.1:5173', width=1400, height=900, min_size=(800,600), background_color='#ffffff')
+    webview.create_window(title='PQP - PDF Que Pariu', url='http://127.0.0.1:5173', width=1400, height=900, min_size=(800,600), background_color='#ffffff')
     webview.start(debug=False)
 
 if __name__ == '__main__':
