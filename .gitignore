@@ -1,4 +1,5 @@
 docs/
+app_backup/
  
 # Build outputs
 dist/
@@ -47,4 +48,4 @@ npm-debug.log*
 ._*
 .Spotlight-V100
 .Trashes
-ehthumbs.db
+ehthumbs.dbnode_modules_old/

@@ -11,6 +11,7 @@ Uma aplicação desktop para editar PDFs.
 - **Adicionar Imagens** - Cole assinaturas, logos, carimbos, etc.
 - **Navegação Intuitiva** - Scroll do mouse para navegar, Ctrl+Scroll para zoom
 - **Salvar PDF** - Exporte o PDF modificado
+- **Undo / Redo** - Desfazer/refazer últimas alterações no editor (Ctrl+Z / Ctrl+Y)
 
 ## Executar
 
@@ -112,6 +113,12 @@ python desktop\main.py
 ```
 
 Abre em `http://localhost:5173`
+
+Observações úteis
+- No editor, ao redimensionar a imagem pelos cantos (handles de canto) a escala é mantida proporcional automaticamente. Para redimensionar proporcionalmente a partir das arestas pressione `Shift`.
+- Durante edição, use `Ctrl+Z` (ou `Cmd+Z` no macOS) para desfazer e `Ctrl+Y` / `Ctrl+Shift+Z` para refazer. Também há botões de desfazer/refazer na barra superior do editor.
+- Ao gerar o executável com PyInstaller, feche qualquer instância de `dist/PQP.exe` que esteja em execução antes de rodar o script de build (`desktop\build.ps1`) — caso contrário o PyInstaller pode falhar com erro de acesso negado.
+- No executável empacotado, o download usa o diálogo nativo de salvar arquivo (via pywebview) quando disponível; no navegador o download usa o comportamento padrão do browser.
 
 ## Estrutura
 

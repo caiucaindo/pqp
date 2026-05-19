@@ -17,12 +17,13 @@ import {
   Loader2,
   Settings2,
   Download,
-  Pencil
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { downloadPdf } from '@/lib/download';
 
 /* ── types ────────────────────────────────────────────────────── */
 interface PdfFile {
@@ -43,18 +44,6 @@ function formatBytes(bytes: number): string {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
-function triggerDownload(bytes: Uint8Array, filename: string) {
-  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 /** Load a PDF and rotate every page by the given degrees.
@@ -212,8 +201,7 @@ export default function MergePage() {
       const rotated = await prepareRotatedPdf(pdfFile.file, pdfFile.rotation);
       const bytes = await rotated.save();
       const cleanName = pdfFile.name.replace(/\.pdf$/i, '');
-      const suffix = pdfFile.rotation === 0 ? '' : `_rot${pdfFile.rotation}`;
-      triggerDownload(bytes, `${cleanName}${suffix}.pdf`);
+      await downloadPdf(bytes, `${cleanName}.pdf`);
     } catch (err) {
       console.error(err);
       alert('Erro ao processar PDF. Verifique se o arquivo não está corrompido.');
@@ -265,9 +253,9 @@ export default function MergePage() {
 
       const bytes = await merged.save();
       const filename = files.length === 1
-        ? files[0].name.replace(/\.pdf$/i, '') + '_rotated.pdf'
+        ? files[0].name.replace(/\.pdf$/i, '') + '.pdf'
         : `merged_${new Date().toISOString().slice(0, 10)}.pdf`;
-      triggerDownload(bytes, filename);
+      await downloadPdf(bytes, filename);
     } catch (err) {
       console.error(err);
       alert('Erro ao mesclar PDFs. Verifique se os arquivos não estão corrompidos.');
@@ -292,23 +280,25 @@ export default function MergePage() {
     <div className="min-h-screen bg-background text-foreground font-sans">
       {/* Header */}
       <header className="border-b border-zinc-800 sticky top-0 z-10 backdrop-blur">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-indigo-600 p-1.5 rounded-lg">
-              <FileText className="w-5 h-5 text-white" />
+        <div className="relative h-14 px-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/')}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-indigo-400 gap-1"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-xs">Voltar</span>
+          </Button>
+
+          <div className="max-w-3xl mx-auto h-full flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="bg-indigo-600 p-1.5 rounded-lg">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-lg font-semibold tracking-tight">PDF Merger</h1>
             </div>
-            <h1 className="text-lg font-semibold tracking-tight">PDF Merger</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/editor')}
-              className="text-zinc-400 hover:text-indigo-400 gap-1"
-            >
-              <Pencil className="w-4 h-4" />
-              <span className="text-xs">Editor</span>
-            </Button>
+            <div className="flex items-center gap-2">
             {files.length > 0 && (
               <>
                 <span className="text-sm text-zinc-400">{files.length} arquivo(s)</span>
@@ -322,6 +312,7 @@ export default function MergePage() {
                 </Button>
               </>
             )}
+            </div>
           </div>
         </div>
       </header>

@@ -5,6 +5,7 @@ Moved into `desktop/` folder; resolves frontend path relative to repo root.
 import os
 import sys
 import threading
+import base64
 from pathlib import Path
 from fastapi import FastAPI, staticfiles
 from fastapi.responses import FileResponse
@@ -22,6 +23,24 @@ app = FastAPI(
     title="PQP - PDF Que Pariu",
     description="Editor de PDF simples, rápido e sem frescura."
 )
+
+
+class Api:
+    def savePdf(self, filename: str, payload_b64: str):
+        window = webview.windows[0]
+        result = window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename=filename,
+        )
+        if not result:
+            return False
+
+        save_path = Path(result[0])
+        if save_path.suffix.lower() != '.pdf':
+            save_path = save_path.with_suffix('.pdf')
+
+        save_path.write_bytes(base64.b64decode(payload_b64))
+        return True
 
 # Mount static files (frontend)
 if frontend_dist.exists():
@@ -65,7 +84,15 @@ def main():
     server_thread.start()
     import time
     time.sleep(1)
-    webview.create_window(title='PQP - PDF Que Pariu', url='http://127.0.0.1:5173', width=1400, height=900, min_size=(800,600), background_color='#ffffff')
+    webview.create_window(
+        title='PQP - PDF Que Pariu',
+        url='http://127.0.0.1:5173',
+        width=1400,
+        height=900,
+        min_size=(800,600),
+        background_color='#ffffff',
+        js_api=Api(),
+    )
     webview.start(debug=False)
 
 if __name__ == '__main__':
