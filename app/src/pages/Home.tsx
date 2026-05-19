@@ -70,7 +70,7 @@ export default function Home() {
       <div className="flex flex-col items-center mb-12">
           <div className="mb-6">
             {logoUrl ? (
-              <img src={logoUrl} alt="logo" className="w-44 h-44 mb-4 object-contain" />
+              <img src={logoUrl} alt="logo" className="w-60 h-60 mb-4 object-contain" />
             ) : (
               <div className="bg-indigo-600 p-4 rounded-2xl mb-4 shadow-lg shadow-indigo-900/30">
                 <FileText className="w-12 h-12 text-white" />
