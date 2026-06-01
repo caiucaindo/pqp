@@ -1,21 +1,32 @@
 Write-Host "[desktop/build.ps1] Starting build..."
 
+$ErrorActionPreference = "Stop"
+
 # Root do projeto
-$root = Resolve-Path "$PSScriptRoot\.."
+$root = (Resolve-Path "$PSScriptRoot\..").Path
+$npmCmd = "npm.cmd"
+$pyinstallerExe = Join-Path $root ".venv\Scripts\pyinstaller.exe"
 
-Write-Host "Activating virtual environment..."
-& "$root\.venv\Scripts\Activate.ps1"
+if (-not (Test-Path $pyinstallerExe)) {
+    Write-Host "[desktop/build.ps1] pyinstaller nao encontrado em $pyinstallerExe"
+    Write-Host "[desktop/build.ps1] Crie/ative a .venv e instale requirements primeiro."
+    exit 1
+}
 
-Set-Location "$root\app"
+Set-Location (Join-Path $root "app")
 
-npm run build
+& $npmCmd run build
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Frontend build failed"
+    Write-Host "[desktop/build.ps1] Frontend build failed"
     exit 1
 }
 
 Set-Location $root
 
-pyinstaller desktop\build.spec --noconfirm
+& $pyinstallerExe "desktop\build.spec" --noconfirm --clean
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[desktop/build.ps1] PyInstaller build failed"
+    exit 1
+}
 
-Write-Host "Build finished"
+Write-Host "[desktop/build.ps1] Build finished"

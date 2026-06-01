@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { PDFDocument, degrees } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 import {
@@ -16,10 +15,13 @@ import {
   PenLine,
   CornerUpLeft,
   CornerUpRight,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { downloadPdf } from '@/lib/download';
+import { PageHeader } from '@/components/PageHeader';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -65,7 +67,6 @@ const imagesCache: Record<string, HTMLImageElement> = {};
 
 /* ── Editor Page ──────────────────────────────────────────────── */
 export default function EditorPage() {
-  const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -329,53 +330,70 @@ export default function EditorPage() {
   };
 
   /* ── handle image upload ────────────────────────────────────── */
-  const handleImageUpload = (file: File) => {
-    if (!pdfRenderData) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        // Default size: 30% of canvas width, maintain aspect ratio
-        const maxW = pdfRenderData.canvasWidth * 0.3;
-        const scale = Math.min(maxW / img.naturalWidth, 1);
-        const w = img.naturalWidth * scale;
-        const h = img.naturalHeight * scale;
+  const createPlacedImage = (file: File, offsetIndex = 0): Promise<PlacedImage> => {
+    if (!pdfRenderData) {
+      return Promise.reject(new Error('PDF render data not ready'));
+    }
 
-        // Center on canvas
-        const x = (pdfRenderData.canvasWidth - w) / 2;
-        const y = (pdfRenderData.canvasHeight - h) / 2;
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Erro ao ler imagem'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Imagem invalida'));
+        img.onload = () => {
+          const maxW = pdfRenderData.canvasWidth * 0.3;
+          const scale = Math.min(maxW / img.naturalWidth, 1);
+          const w = img.naturalWidth * scale;
+          const h = img.naturalHeight * scale;
+          const offset = offsetIndex * 18;
 
-        const newImg: PlacedImage = {
-          id: Math.random().toString(36).substring(2, 11),
-          src: reader.result as string,
-          x,
-          y,
-          width: w,
-          height: h,
-          naturalWidth: img.naturalWidth,
-          naturalHeight: img.naturalHeight,
-          confirmed: false,
-          rotation: 0,
+          const newImg: PlacedImage = {
+            id: Math.random().toString(36).substring(2, 11),
+            src: reader.result as string,
+            x: (pdfRenderData.canvasWidth - w) / 2 + offset,
+            y: (pdfRenderData.canvasHeight - h) / 2 + offset,
+            width: w,
+            height: h,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+            confirmed: false,
+            rotation: 0,
+          };
+
+          const imageEl = new Image();
+          imageEl.src = newImg.src;
+          imagesCache[newImg.id] = imageEl;
+          resolve(newImg);
         };
-        // cache the image element to avoid reloading during drawing
-        const imageEl = new Image();
-        imageEl.src = newImg.src;
-        imagesCache[newImg.id] = imageEl;
-
-        // push history before adding
-        pushHistory();
-        setPlacedImages((prev) => [...prev, newImg]);
-        setSelectedImageId(newImg.id);
+        img.src = reader.result as string;
       };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (files: File | File[]) => {
+    if (!pdfRenderData) return;
+    const imageFiles = (Array.isArray(files) ? files : [files]).filter(
+      (file) => file.type === 'image/png' || file.type === 'image/jpeg'
+    );
+    if (imageFiles.length === 0) return;
+
+    try {
+      const newImages = await Promise.all(imageFiles.map((file, index) => createPlacedImage(file, index)));
+      pushHistory();
+      setPlacedImages((prev) => [...prev, ...newImages]);
+      setSelectedImageId(newImages[newImages.length - 1].id);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao carregar imagem.');
+    }
   };
 
   const handleDroppedFiles = async (files: FileList | File[]) => {
     const droppedFiles = Array.from(files);
     const pdf = droppedFiles.find((file) => file.type === 'application/pdf');
-    const image = droppedFiles.find(
+    const images = droppedFiles.filter(
       (file) => file.type === 'image/png' || file.type === 'image/jpeg'
     );
 
@@ -384,8 +402,8 @@ export default function EditorPage() {
       return;
     }
 
-    if (image) {
-      handleImageUpload(image);
+    if (images.length > 0) {
+      void handleImageUpload(images);
     }
   };
 
@@ -867,10 +885,17 @@ export default function EditorPage() {
   };
 
   const onImgInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      handleImageUpload(e.target.files[0]);
+    if (e.target.files?.length) {
+      void handleImageUpload(Array.from(e.target.files));
       e.target.value = '';
     }
+  };
+  const headerLayout = {
+    className: 'mr-4',
+    style: {
+      width: 'calc(100vw - 17rem)',
+      marginLeft: '17rem',
+    } as React.CSSProperties,
   };
 
   return (
@@ -881,78 +906,49 @@ export default function EditorPage() {
       onDragLeave={handleDragLeave}
       onDrop={handleRootDrop}
     >
-      {/* Header */}
-      <header className="border-b border-zinc-800 sticky top-0 z-10 backdrop-blur">
-        <div className="relative h-14 px-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/')}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-indigo-400 gap-1"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-xs">Voltar</span>
-          </Button>
+      <PageHeader
+        title="Editar PDF"
+        icon={<PenLine className="w-5 h-5 text-white" />}
+        iconClassName="bg-emerald-600"
+        contentClassName={headerLayout.className}
+        contentStyle={headerLayout.style}
+        actions={pdfDoc && placedImages.length > 0 && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={undo}
+              disabled={historyRef.current.past.length === 0}
+              className="text-zinc-300"
+            >
+              <CornerUpLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={redo}
+              disabled={historyRef.current.future.length === 0}
+              className="text-zinc-300"
+            >
+              <CornerUpRight className="w-4 h-4" />
+            </Button>
 
-          <div className="max-w-[1400px] mx-auto h-full flex items-center">
-            <div className="w-64" />
-            <div className="flex-1 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="bg-emerald-600 p-1.5 rounded-lg">
-                  <PenLine className="w-5 h-5 text-white" />
-                </div>
-                <h1 className="text-lg font-semibold tracking-tight">Editor de PDF</h1>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {pdfDoc && (
-                  <>
-                    <span className="text-sm text-zinc-400">
-                      Página {currentPage} / {pageCount}
-                    </span>
-                    {placedImages.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={undo}
-                              disabled={historyRef.current.past.length === 0}
-                              className="text-zinc-300"
-                            >
-                              <CornerUpLeft className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={redo}
-                              disabled={historyRef.current.future.length === 0}
-                              className="text-zinc-300"
-                            >
-                              <CornerUpRight className="w-4 h-4" />
-                            </Button>
-
-                            <Button
-                              onClick={savePdf}
-                              disabled={isProcessing}
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
-                            >
-                              {isProcessing ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Save className="w-4 h-4" />
-                              )}
-                              <span className="text-sm">Salvar PDF</span>
-                            </Button>
-                          </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+            <Button
+              onClick={savePdf}
+              disabled={isProcessing}
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              <span className="text-sm">Salvar PDF</span>
+            </Button>
+          </>
+        )}
+      />
 
       {/* Main content */}
       <div className="flex-1 flex w-full">
@@ -986,26 +982,31 @@ export default function EditorPage() {
 
               {/* Page navigation */}
               {pageCount > 1 && (
-                <div className="flex items-center justify-between">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage((p) => p - 1)}
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm text-zinc-300">
-                    {currentPage} / {pageCount}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={currentPage >= pageCount}
-                    onClick={() => setCurrentPage((p) => p + 1)}
-                  >
-                    <ArrowLeft className="w-4 h-4 rotate-180" />
-                  </Button>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                    PÃ¡ginas do PDF
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={currentPage <= 1}
+                      onClick={() => setCurrentPage((p) => p - 1)}
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <span className="text-sm text-zinc-300">
+                      {currentPage} / {pageCount}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={currentPage >= pageCount}
+                      onClick={() => setCurrentPage((p) => p + 1)}
+                    >
+                      <ArrowLeft className="w-4 h-4 rotate-180" />
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -1015,6 +1016,7 @@ export default function EditorPage() {
                   ref={imgInputRef}
                   type="file"
                   accept=".png,.jpg,.jpeg"
+                  multiple
                   onChange={onImgInputChange}
                   className="hidden"
                 />
@@ -1197,6 +1199,7 @@ export default function EditorPage() {
         ref={imgInputRef}
         type="file"
         accept=".png,.jpg,.jpeg"
+        multiple
         onChange={onImgInputChange}
         className="hidden"
       />

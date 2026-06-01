@@ -26,7 +26,7 @@ app = FastAPI(
 
 
 class Api:
-    def savePdf(self, filename: str, payload_b64: str):
+    def saveFile(self, filename: str, payload_b64: str):
         window = webview.windows[0]
         result = window.create_file_dialog(
             webview.FileDialog.SAVE,
@@ -36,11 +36,15 @@ class Api:
             return False
 
         save_path = Path(result[0])
-        if save_path.suffix.lower() != '.pdf':
-            save_path = save_path.with_suffix('.pdf')
+        requested_suffix = Path(filename).suffix
+        if requested_suffix and save_path.suffix.lower() != requested_suffix.lower():
+            save_path = save_path.with_suffix(requested_suffix)
 
         save_path.write_bytes(base64.b64decode(payload_b64))
         return True
+
+    def savePdf(self, filename: str, payload_b64: str):
+        return self.saveFile(filename, payload_b64)
 
 # Mount static files (frontend)
 if frontend_dist.exists():

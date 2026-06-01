@@ -1,21 +1,21 @@
-Write-Host "[desktop/build.ps1] Starting build..."
+@echo off
+setlocal
 
-# Root do projeto
-$root = Resolve-Path "$PSScriptRoot\.."
+set "SCRIPT_DIR=%~dp0"
+set "PS1_PATH=%SCRIPT_DIR%build.ps1"
 
-Write-Host "Activating virtual environment..."
-& "$root\.venv\Scripts\Activate.ps1"
+if not exist "%PS1_PATH%" (
+  echo [desktop/build.bat] build.ps1 nao encontrado em: %PS1_PATH%
+  exit /b 1
+)
 
-Set-Location "$root\app"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1_PATH%"
+set "EXIT_CODE=%ERRORLEVEL%"
 
-npm run build
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Frontend build failed"
-    exit 1
-}
+if not "%EXIT_CODE%"=="0" (
+  echo [desktop/build.bat] Build falhou com codigo %EXIT_CODE%.
+  exit /b %EXIT_CODE%
+)
 
-Set-Location $root
-
-pyinstaller desktop\build.spec --noconfirm
-
-Write-Host "Build finished"
+echo [desktop/build.bat] Build concluida com sucesso.
+exit /b 0

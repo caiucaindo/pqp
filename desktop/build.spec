@@ -4,12 +4,38 @@ PyInstaller spec moved into desktop/
 Assumes execution from repo root: pyinstaller desktop/build.spec
 """
 import os
+import sys
 
 block_cipher = None
 # Paths relative to current working directory (repo root)
 repo_root = os.getcwd()
 app_dist = os.path.join(repo_root, 'app', 'dist')
 main_py = os.path.join(repo_root, 'desktop', 'main.py')
+custom_hooks = os.path.join(repo_root, 'desktop', 'hooks')
+
+# Tcl/Tk runtime data required by PyInstaller's tkinter runtime hook.
+# In a venv, sys.executable points to .venv\Scripts, while Tcl/Tk lives in
+# the base Python installation.
+python_roots = [
+    sys.base_prefix,
+    sys.prefix,
+    os.path.dirname(os.path.dirname(sys.executable)),
+    os.path.dirname(sys.executable),
+]
+
+extra_datas = []
+for python_root in python_roots:
+    tcl_src = os.path.join(python_root, 'tcl', 'tcl8.6')
+    tk_src = os.path.join(python_root, 'tcl', 'tk8.6')
+    if os.path.isdir(tcl_src) and os.path.isdir(tk_src):
+        extra_datas.extend([
+            (tcl_src, 'tcl'),
+            (tk_src, 'tk'),
+        ])
+        break
+
+if not extra_datas:
+    raise FileNotFoundError('Tcl/Tk runtime folders were not found for PyInstaller packaging.')
 
 a = Analysis(
     [main_py],
@@ -17,6 +43,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (app_dist, './app/dist'),
+        *extra_datas,
     ],
     hiddenimports=[
         'fastapi',
@@ -25,10 +52,15 @@ a = Analysis(
         'starlette',
         'webview',
     ],
-    hookspath=[],
+    hookspath=[custom_hooks],
     hooksconfig={},
     runtime_hooks=[],
-    excludedimports=[],
+    excludedimports=[
+        'tkinter',
+        '_tkinter',
+        'tcl',
+        'tk',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

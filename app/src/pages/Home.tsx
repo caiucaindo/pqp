@@ -15,12 +15,12 @@ function ToolCard({ icon, title, description, onClick, color }: ToolCardProps) {
     <button
       onClick={onClick}
       className={cn(
-        'group w-full text-left rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 transition-all duration-200',
+        'group w-full text-left rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5 transition-all duration-200',
         'hover:border-zinc-700 hover:bg-zinc-800/80 hover:shadow-lg hover:scale-[1.02]',
         'active:scale-[0.98]'
       )}
     >
-      <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center mb-4', color)}>
+      <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-3', color)}>
         {icon}
       </div>
       <h3 className="text-lg font-semibold text-zinc-100 mb-1">{title}</h3>
@@ -65,14 +65,14 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans flex flex-col items-center justify-center px-4">
+    <div className="h-screen overflow-hidden bg-background text-foreground font-sans flex flex-col items-center justify-center px-4 py-4">
       {/* Logo */}
-      <div className="flex flex-col items-center mb-12">
-          <div className="mb-6">
+      <div className="flex flex-col items-center mb-6 sm:mb-8">
+          <div className="mb-2 sm:mb-3">
             {logoUrl ? (
-              <img src={logoUrl} alt="logo" className="w-60 h-60 mb-4 object-contain" />
+              <img src={logoUrl} alt="logo" className="h-[clamp(8rem,22vh,15rem)] w-[clamp(8rem,22vh,15rem)] mb-1 object-contain" />
             ) : (
-              <div className="bg-indigo-600 p-4 rounded-2xl mb-4 shadow-lg shadow-indigo-900/30">
+              <div className="bg-indigo-600 p-4 rounded-2xl mb-1 shadow-lg shadow-indigo-900/30">
                 <FileText className="w-12 h-12 text-white" />
               </div>
             )}
@@ -81,7 +81,7 @@ export default function Home() {
       </div>
 
       {/* Tool Cards */}
-      <div className="w-full max-w-md space-y-3">
+      <div className="w-full max-w-md space-y-2.5">
         {tools.map((tool) => (
           <ToolCard
             key={tool.path}
@@ -95,7 +95,7 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <p className="mt-12 text-xs text-zinc-600">
+      <p className="mt-6 sm:mt-8 text-xs text-zinc-600">
         Editor de PDFs simples e direto
       </p>
     </div>

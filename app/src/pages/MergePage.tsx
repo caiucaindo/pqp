@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { PDFDocument, degrees } from 'pdf-lib';
 import { generateThumbnail } from '@/utils/thumbnail';
-import { useNavigate } from 'react-router-dom';
 import {
   Upload,
   FileText,
@@ -17,13 +16,13 @@ import {
   Loader2,
   Settings2,
   Download,
-  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { downloadPdf } from '@/lib/download';
+import { PageHeader, pageContentLayout } from '@/components/PageHeader';
 
 /* ── types ────────────────────────────────────────────────────── */
 interface PdfFile {
@@ -64,13 +63,13 @@ const A4_H = 841.89;
 
 /* ── App ───────────────────────────────────────────────────────── */
 export default function MergePage() {
-  const navigate = useNavigate();
   const [files, setFiles] = useState<PdfFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [standardizeSize, setStandardizeSize] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const contentLayout = pageContentLayout('standard');
 
   /* ── drag & drop (global upload zone) ───────────────────────── */
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -278,46 +277,28 @@ export default function MergePage() {
   /* ── render ──────────────────────────────────────────────────── */
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
-      {/* Header */}
-      <header className="border-b border-zinc-800 sticky top-0 z-10 backdrop-blur">
-        <div className="relative h-14 px-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/')}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-indigo-400 gap-1"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-xs">Voltar</span>
-          </Button>
+      <PageHeader
+        title="Mesclar PDF"
+        icon={<FileText className="w-5 h-5 text-white" />}
+        iconClassName="bg-indigo-600"
+        contentClassName={contentLayout.className}
+        contentStyle={contentLayout.style}
+        actions={files.length > 0 && (
+          <>
+            <span className="text-sm text-zinc-400">{files.length} arquivo(s)</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearAll}
+              className="text-slate-500 hover:text-red-600"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </>
+        )}
+      />
 
-          <div className="max-w-3xl mx-auto h-full flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="bg-indigo-600 p-1.5 rounded-lg">
-                <FileText className="w-5 h-5 text-white" />
-              </div>
-              <h1 className="text-lg font-semibold tracking-tight">PDF Merger</h1>
-            </div>
-            <div className="flex items-center gap-2">
-            {files.length > 0 && (
-              <>
-                <span className="text-sm text-zinc-400">{files.length} arquivo(s)</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAll}
-                  className="text-slate-500 hover:text-red-600"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </>
-            )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 py-8">
+      <main className={cn(contentLayout.className, 'py-8')} style={contentLayout.style}>
         {/* Upload zone */}
         <div
           onDragOver={handleDragOver}
