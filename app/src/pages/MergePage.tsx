@@ -67,23 +67,32 @@ export default function MergePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [standardizeSize, setStandardizeSize] = useState(true);
+  const [standardizeSize, setStandardizeSize] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentLayout = pageContentLayout('standard');
+  const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
 
   /* ── drag & drop (global upload zone) ───────────────────────── */
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
-    setIsDragging(false);
+    e.stopPropagation();
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
     const dropped = Array.from(e.dataTransfer.files).filter(
       (f) => f.type === 'application/pdf'
@@ -168,17 +177,20 @@ export default function MergePage() {
 
   /* ── drag reordering ────────────────────────────────────────── */
   const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.stopPropagation();
     e.dataTransfer.setData('text/plain', String(index));
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOverItem = (e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverIndex(index);
   };
 
   const handleDropItem = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
     const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
     if (dragIndex === dropIndex || isNaN(dragIndex)) {
       setDragOverIndex(null);
@@ -276,7 +288,12 @@ export default function MergePage() {
 
   /* ── render ──────────────────────────────────────────────────── */
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div
+      className="min-h-screen bg-background text-foreground font-sans"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <PageHeader
         title="Mesclar PDF"
         icon={<FileText className="w-5 h-5 text-white" />}

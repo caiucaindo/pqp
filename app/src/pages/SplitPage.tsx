@@ -150,15 +150,22 @@ export default function SplitPage() {
   const appendModeRef = useRef(false);
   const standardContentLayout = pageContentLayout('standard');
   const wideContentLayout = pageContentLayout('wide');
+  const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
-    setIsDragging(false);
+    e.stopPropagation();
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
   }, []);
 
   const loadPdf = async (pdfFile: File, append: boolean) => {
@@ -226,11 +233,13 @@ export default function SplitPage() {
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
     const dropped = Array.from(e.dataTransfer.files).find((f) => f.type === 'application/pdf');
     if (dropped) {
-      void loadPdf(dropped, false);
+      void loadPdf(dropped, Boolean(sourceFileName && pages.length > 0));
     }
   };
 
@@ -392,7 +401,12 @@ export default function SplitPage() {
   const activeContentLayout = sourceFileName && pages.length > 0 ? wideContentLayout : standardContentLayout;
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div
+      className="min-h-screen bg-background text-foreground font-sans"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <PageHeader
         title="Separar PDF"
         icon={<Scissors className="w-5 h-5 text-white" />}

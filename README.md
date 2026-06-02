@@ -7,9 +7,12 @@ Uma aplicação desktop para editar PDFs.
 ## Funcionalidades
 
 - **Combinar PDFs** - Junte múltiplos arquivos PDF em um único documento
+- **Separar PDFs** - Separe paginas por cortes, mantenha paginas juntas e baixe os arquivos em ZIP
 - **Girar Páginas** - Rotacione páginas do PDF conforme necessário
 - **Adicionar Imagens** - Cole assinaturas, logos, carimbos, etc.
-- **Navegação Intuitiva** - Scroll do mouse para navegar, Ctrl+Scroll para zoom
+- **Camadas no Editor** - Organize imagens por pagina, reordene, oculte/mostre e reposicione com duplo clique
+- **Drag and Drop Global** - Arraste PDFs para qualquer area das telas de editar, mesclar e separar
+- **Navegacao Intuitiva** - Navegue pelas paginas pela barra lateral e use Ctrl+Scroll para zoom
 - **Salvar PDF** - Exporte o PDF modificado
 - **Undo / Redo** - Desfazer/refazer últimas alterações no editor (Ctrl+Z / Ctrl+Y)
 
@@ -115,7 +118,10 @@ python desktop\main.py
 Abre em `http://localhost:5173`
 
 Observações úteis
+
 - No editor, ao redimensionar a imagem pelos cantos (handles de canto) a escala é mantida proporcional automaticamente. Para redimensionar proporcionalmente a partir das arestas pressione `Shift`.
+- Imagens adicionadas no editor pertencem a pagina atual do PDF e podem ser organizadas pela lista de camadas.
+- Na tela de separar PDF, use os cortes entre paginas para definir quais paginas ficam juntas antes de baixar tudo em ZIP.
 - Durante edição, use `Ctrl+Z` (ou `Cmd+Z` no macOS) para desfazer e `Ctrl+Y` / `Ctrl+Shift+Z` para refazer. Também há botões de desfazer/refazer na barra superior do editor.
 - Ao gerar o executável com PyInstaller, feche qualquer instância de `dist/PQP.exe` que esteja em execução antes de rodar o script de build (`desktop\build.ps1`) — caso contrário o PyInstaller pode falhar com erro de acesso negado.
 - No executável empacotado, o download usa o diálogo nativo de salvar arquivo (via pywebview) quando disponível; no navegador o download usa o comportamento padrão do browser.
@@ -140,7 +146,7 @@ Observações úteis
 
 ## Stack Técnico
 
-- **Frontend:** React 19 + TypeScript + Vite + PDF.js
+- **Frontend:** React 19 + TypeScript + Vite + PDF.js + pdf-lib
 - **Backend:** FastAPI + Uvicorn
 - **Desktop:** PyWebView (nativa WebView2 no Windows)
 - **Empacotamento:** PyInstaller (executável standalone)

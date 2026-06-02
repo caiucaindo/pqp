@@ -1303,10 +1303,10 @@ export default function EditorPage() {
         {/* Canvas area */}
         <main className="flex-1 min-w-0 min-h-0 bg-background overflow-auto flex items-start justify-center p-6 relative">
           {isDraggingFile && (
-            <div className="absolute inset-0 z-20 m-4 rounded-2xl border-2 border-dashed border-indigo-400 bg-indigo-50/80 backdrop-blur-sm flex items-center justify-center text-indigo-700 pointer-events-none">
+            <div className="absolute inset-0 z-20 m-4 rounded-2xl border-2 border-dashed border-indigo-500 bg-indigo-950/65 backdrop-blur-sm flex items-center justify-center text-indigo-100 pointer-events-none">
               <div className="text-center">
                 <p className="text-lg font-semibold">Solte o arquivo aqui</p>
-                <p className="text-sm mt-1">PDF abre automaticamente, imagem entra no editor</p>
+                <p className="text-sm mt-1 text-indigo-200">PDF abre automaticamente, imagem entra no editor</p>
               </div>
             </div>
           )}
