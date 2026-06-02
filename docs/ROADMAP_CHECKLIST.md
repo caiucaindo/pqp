@@ -75,13 +75,14 @@ Este arquivo organiza ideias futuras em blocos de implementacao. Itens marcados 
 - [x] Corrigir titulo para Mesclar PDF.
 - [x] Alinhar header e caixa principal com padrao reutilizavel.
 - [x] Permitir arrastar PDFs para qualquer area da tela.
+- [x] Permitir inserir PDFs arrastados diretamente entre arquivos existentes.
 - [x] Deixar Padronizar em A4 desligado por padrao.
-- [ ] Visualizar PDF dentro da tela Mesclar.
-- [ ] No visualizador de Mesclar, navegar entre paginas do PDF.
-- [ ] Ajustar thumbnail/card quando PDF for rotacionado em 90 ou 270 graus para nao conflitar com titulo/conteudo.
-- [ ] Ao ativar A4, mostrar preview/thumbnail na orientacao final esperada.
-- [ ] Ao ativar A4, sugerir rotacao correta para PDFs deitados/em pe.
-- [ ] Permitir escolher 90 ou 180 graus quando a correcao automatica puder deixar documento de cabeca para baixo.
+- [x] Visualizar PDF dentro da tela Mesclar.
+- [x] No visualizador de Mesclar, navegar entre paginas do PDF.
+- [x] Ajustar thumbnail/card quando PDF for rotacionado em 90 ou 270 graus para nao conflitar com titulo/conteudo.
+- [x] Ao ativar A4, mostrar preview/thumbnail na orientacao final esperada.
+- [x] Ao ativar A4, sugerir rotacao correta para PDFs deitados/em pe.
+- [x] Permitir escolher 90 ou 180 graus quando a correcao automatica puder deixar documento de cabeca para baixo.
 - [ ] Avaliar opcao de aplicar rotacao automatica em todos os PDFs.
 
 ## Fase 5 - Organizar PDF
