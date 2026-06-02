@@ -24,6 +24,12 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { downloadPdf } from '@/lib/download';
 import { PageHeader } from '@/components/PageHeader';
+import {
+  dragHasFiles,
+  dragLooksLikeEditorFile,
+  isEditorImageFile,
+  isPdfFile,
+} from '@/lib/fileTypes';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -111,6 +117,7 @@ export default function EditorPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [, setIsPdfLoading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [isInvalidDraggedFile, setIsInvalidDraggedFile] = useState(false);
 
   /* Zoom */
   const [zoom, setZoom] = useState(1);
@@ -433,7 +440,7 @@ export default function EditorPage() {
   const handleImageUpload = async (files: File | File[]) => {
     if (!pdfRenderData) return;
     const imageFiles = (Array.isArray(files) ? files : [files]).filter(
-      (file) => file.type === 'image/png' || file.type === 'image/jpeg'
+      isEditorImageFile
     );
     if (imageFiles.length === 0) return;
 
@@ -450,10 +457,8 @@ export default function EditorPage() {
 
   const handleDroppedFiles = async (files: FileList | File[]) => {
     const droppedFiles = Array.from(files);
-    const pdf = droppedFiles.find((file) => file.type === 'application/pdf');
-    const images = droppedFiles.filter(
-      (file) => file.type === 'image/png' || file.type === 'image/jpeg'
-    );
+    const pdf = droppedFiles.find(isPdfFile);
+    const images = droppedFiles.filter(isEditorImageFile);
 
     if (pdf) {
       await handlePdfUpload(pdf);
@@ -462,7 +467,10 @@ export default function EditorPage() {
 
     if (images.length > 0) {
       void handleImageUpload(images);
+      return;
     }
+
+    alert('Arquivo não aceito. Use PDF, PNG, JPG ou WebP.');
   };
 
   /* ── geometry helpers for rotated transforms ───────────────── */
@@ -825,45 +833,75 @@ export default function EditorPage() {
 
   /* ── drag and drop ──────────────────────────────────────────── */
   const handleDragOver = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (layerDragIdRef.current) return;
+    setIsInvalidDraggedFile(!dragLooksLikeEditorFile(e));
     setIsDraggingFile(true);
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (layerDragIdRef.current) return;
+    setIsInvalidDraggedFile(!dragLooksLikeEditorFile(e));
     setIsDraggingFile(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (e.currentTarget === e.target) {
       setIsDraggingFile(false);
+      setIsInvalidDraggedFile(false);
     }
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingFile(false);
+    setIsInvalidDraggedFile(false);
     void handleDroppedFiles(e.dataTransfer.files);
   };
 
   const handleRootDrop = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (layerDragIdRef.current) {
       layerDragIdRef.current = null;
       setIsDraggingFile(false);
+      setIsInvalidDraggedFile(false);
       return;
     }
     setIsDraggingFile(false);
+    setIsInvalidDraggedFile(false);
     void handleDroppedFiles(e.dataTransfer.files);
   };
+
+  useEffect(() => {
+    const clearExternalDrag = () => {
+      setIsDraggingFile(false);
+      setIsInvalidDraggedFile(false);
+      layerDragIdRef.current = null;
+    };
+
+    window.addEventListener('drop', clearExternalDrag);
+    window.addEventListener('dragend', clearExternalDrag);
+    window.addEventListener('blur', clearExternalDrag);
+    document.addEventListener('visibilitychange', clearExternalDrag);
+    return () => {
+      window.removeEventListener('drop', clearExternalDrag);
+      window.removeEventListener('dragend', clearExternalDrag);
+      window.removeEventListener('blur', clearExternalDrag);
+      document.removeEventListener('visibilitychange', clearExternalDrag);
+    };
+  }, []);
 
   /* ── confirm / unconfirm ────────────────────────────────────── */
   const confirmImage = (id: string) => {
@@ -1119,7 +1157,7 @@ export default function EditorPage() {
                 <input
                   ref={imgInputRef}
                   type="file"
-                  accept=".png,.jpg,.jpeg"
+                  accept=".png,.jpg,.jpeg,.webp"
                   multiple
                   onChange={onImgInputChange}
                   className="hidden"
@@ -1303,10 +1341,21 @@ export default function EditorPage() {
         {/* Canvas area */}
         <main className="flex-1 min-w-0 min-h-0 bg-background overflow-auto flex items-start justify-center p-6 relative">
           {isDraggingFile && (
-            <div className="absolute inset-0 z-20 m-4 rounded-2xl border-2 border-dashed border-indigo-500 bg-indigo-950/65 backdrop-blur-sm flex items-center justify-center text-indigo-100 pointer-events-none">
+            <div
+              className={cn(
+                'absolute inset-0 z-20 m-4 rounded-2xl border-2 border-dashed backdrop-blur-sm flex items-center justify-center pointer-events-none',
+                isInvalidDraggedFile
+                  ? 'border-red-500 bg-red-950/60 text-red-100'
+                  : 'border-emerald-500 bg-emerald-950/65 text-emerald-100'
+              )}
+            >
               <div className="text-center">
-                <p className="text-lg font-semibold">Solte o arquivo aqui</p>
-                <p className="text-sm mt-1 text-indigo-200">PDF abre automaticamente, imagem entra no editor</p>
+                <p className="text-lg font-semibold">
+                  {isInvalidDraggedFile ? 'Arquivo não aceito' : 'Basta Soltar'}
+                </p>
+                <p className={cn('text-sm mt-1', isInvalidDraggedFile ? 'text-red-200' : 'text-emerald-200')}>
+                  {isInvalidDraggedFile ? 'Use PDF, PNG, JPG ou WebP' : 'PDF abre automaticamente, imagem entra no editor'}
+                </p>
               </div>
             </div>
           )}
@@ -1364,7 +1413,7 @@ export default function EditorPage() {
       <input
         ref={imgInputRef}
         type="file"
-        accept=".png,.jpg,.jpeg"
+        accept=".png,.jpg,.jpeg,.webp"
         multiple
         onChange={onImgInputChange}
         className="hidden"

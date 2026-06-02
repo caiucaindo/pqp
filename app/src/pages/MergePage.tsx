@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { PDFDocument, degrees } from 'pdf-lib';
 import { generateThumbnail } from '@/utils/thumbnail';
 import {
@@ -23,6 +23,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { downloadPdf } from '@/lib/download';
 import { PageHeader, pageContentLayout } from '@/components/PageHeader';
+import { dragHasFiles, dragLooksLikePdf, isPdfFile } from '@/lib/fileTypes';
 
 /* ── types ────────────────────────────────────────────────────── */
 interface PdfFile {
@@ -65,18 +66,19 @@ const A4_H = 841.89;
 export default function MergePage() {
   const [files, setFiles] = useState<PdfFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isInvalidDrag, setIsInvalidDrag] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [standardizeSize, setStandardizeSize] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contentLayout = pageContentLayout('standard');
-  const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
 
   /* ── drag & drop (global upload zone) ───────────────────────── */
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
+    setIsInvalidDrag(!dragLooksLikePdf(e));
     setIsDragging(true);
   }, []);
 
@@ -86,6 +88,7 @@ export default function MergePage() {
     e.stopPropagation();
     if (e.currentTarget === e.target) {
       setIsDragging(false);
+      setIsInvalidDrag(false);
     }
   }, []);
 
@@ -94,17 +97,45 @@ export default function MergePage() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    setIsInvalidDrag(false);
     const dropped = Array.from(e.dataTransfer.files).filter(
-      (f) => f.type === 'application/pdf'
+      isPdfFile
     );
+    if (dropped.length === 0) {
+      alert('Arquivo não aceito. Use apenas PDFs.');
+      return;
+    }
     addFiles(dropped);
   }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const selected = Array.from(e.target.files).filter((f) => f.type === 'application/pdf');
+    const selected = Array.from(e.target.files).filter(isPdfFile);
+    if (selected.length === 0) {
+      alert('Arquivo não aceito. Use apenas PDFs.');
+      e.target.value = '';
+      return;
+    }
     addFiles(selected);
     e.target.value = '';
+  }, []);
+
+  useEffect(() => {
+    const clearExternalDrag = () => {
+      setIsDragging(false);
+      setIsInvalidDrag(false);
+    };
+
+    window.addEventListener('drop', clearExternalDrag);
+    window.addEventListener('dragend', clearExternalDrag);
+    window.addEventListener('blur', clearExternalDrag);
+    document.addEventListener('visibilitychange', clearExternalDrag);
+    return () => {
+      window.removeEventListener('drop', clearExternalDrag);
+      window.removeEventListener('dragend', clearExternalDrag);
+      window.removeEventListener('blur', clearExternalDrag);
+      document.removeEventListener('visibilitychange', clearExternalDrag);
+    };
   }, []);
 
   /* ── add files (parse pages + thumbnail) ────────────────────── */
@@ -324,7 +355,9 @@ export default function MergePage() {
           onClick={() => fileInputRef.current?.click()}
           className={cn(
             'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200',
-            isDragging
+            isDragging && isInvalidDrag
+              ? 'border-red-500 bg-red-500/10 scale-[1.02]'
+              : isDragging
               ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
               : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/60'
           )}
@@ -341,21 +374,21 @@ export default function MergePage() {
             <div
               className={cn(
                 'p-3 rounded-full transition-colors',
-                isDragging ? 'bg-indigo-500/20' : 'bg-zinc-800'
+                isDragging && isInvalidDrag ? 'bg-red-500/20' : isDragging ? 'bg-indigo-500/20' : 'bg-zinc-800'
               )}
             >
               <Upload
                 className={cn(
                   'w-8 h-8 transition-colors',
-                  isDragging ? 'text-indigo-300' : 'text-zinc-400'
+                  isDragging && isInvalidDrag ? 'text-red-300' : isDragging ? 'text-indigo-300' : 'text-zinc-400'
                 )}
               />
             </div>
             <div>
               <p className="text-base font-medium text-zinc-200">
-                {isDragging ? 'Solte os PDFs aqui' : 'Arraste PDFs ou clique para escolher'}
+                {isDragging && isInvalidDrag ? 'Isso não é um PDF' : isDragging ? 'Basta Soltar' : 'Arraste PDFs ou clique para escolher'}
               </p>
-              <p className="text-sm text-zinc-500 mt-1">Aceita múltiplos arquivos PDF</p>
+              <p className="text-sm text-zinc-500 mt-1">Aceita múltiplos PDFs</p>
             </div>
           </div>
         </div>
@@ -519,7 +552,7 @@ export default function MergePage() {
                     <Settings2 className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-zinc-200">Padronizar tamanho A4</p>
+                    <p className="text-sm font-medium text-zinc-200">Padronizar em A4</p>
                     <p className="text-xs text-zinc-500">
                       Todas as páginas sairão no formato A4, centralizadas e proporcionais
                     </p>
