@@ -17,6 +17,8 @@ import {
   CornerUpRight,
   ArrowUp,
   ArrowDown,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -31,14 +33,18 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 /* ── types ────────────────────────────────────────────────────── */
 interface PlacedImage {
   id: string;
+  name: string;
   src: string;       // dataURL
   x: number;         // canvas px
   y: number;         // canvas px
   width: number;     // canvas px
   height: number;    // canvas px
+  canvasWidth: number;
+  canvasHeight: number;
   naturalWidth: number;
   naturalHeight: number;
   confirmed: boolean;
+  visible: boolean;
   rotation?: number; // degrees
 }
 
@@ -83,8 +89,18 @@ export default function EditorPage() {
   } | null>(null);
 
   /* Image state */
-  const [placedImages, setPlacedImages] = useState<PlacedImage[]>([]);
+  const [imagesByPage, setImagesByPage] = useState<Record<number, PlacedImage[]>>({});
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const placedImages = imagesByPage[currentPage] ?? [];
+  const setPlacedImages = (updater: PlacedImage[] | ((prev: PlacedImage[]) => PlacedImage[])) => {
+    setImagesByPage((prev) => {
+      const currentImages = prev[currentPage] ?? [];
+      const nextImages = typeof updater === 'function' ? updater(currentImages) : updater;
+      return { ...prev, [currentPage]: nextImages };
+    });
+  };
+  const totalPlacedImages = Object.values(imagesByPage).reduce((total, pageImages) => total + pageImages.length, 0);
+  const layerDragIdRef = useRef<string | null>(null);
 
   /* Interaction state */
   const [mode, setMode] = useState<'idle' | 'dragging' | 'resizing' | 'rotating'>('idle');
@@ -101,6 +117,7 @@ export default function EditorPage() {
 
   /* PDF background cache */
   const pdfBackgroundRef = useRef<ImageData | null>(null);
+  const renderVersionRef = useRef(0);
 
   /* History (undo / redo) */
   const historyRef = useRef<{
@@ -163,39 +180,76 @@ export default function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    setSelectedImageId(null);
+    setMode('idle');
+    setResizeHandle(null);
+    historyRef.current.past = [];
+    historyRef.current.future = [];
+    setHistoryVersion((v) => v + 1);
+  }, [currentPage]);
+
   /* ── render PDF to background cache ──────────────────────────── */
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current) return;
+    const renderVersion = renderVersionRef.current + 1;
+    renderVersionRef.current = renderVersion;
+    let renderTask: pdfjsLib.RenderTask | null = null;
+    let cancelled = false;
+
+    pdfBackgroundRef.current = null;
+    setPdfRenderData(null);
     
     const renderPdfToCache = async () => {
-      const page = await pdfDoc.getPage(currentPage);
-      const baseScale = 1.5;
-      const viewport = page.getViewport({ scale: baseScale });
+      try {
+        const page = await pdfDoc.getPage(currentPage);
+        if (cancelled || renderVersion !== renderVersionRef.current) return;
 
-      const canvas = canvasRef.current!;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+        const baseScale = 1.5;
+        const viewport = page.getViewport({ scale: baseScale });
+        const renderCanvas = document.createElement('canvas');
+        renderCanvas.width = viewport.width;
+        renderCanvas.height = viewport.height;
 
-      const ctx = canvas.getContext('2d')!;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const renderCtx = renderCanvas.getContext('2d')!;
+        renderCtx.clearRect(0, 0, renderCanvas.width, renderCanvas.height);
+        renderCtx.fillStyle = '#ffffff';
+        renderCtx.fillRect(0, 0, renderCanvas.width, renderCanvas.height);
 
-      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
-      page.cleanup?.();
+        renderTask = page.render({ canvas: renderCanvas, canvasContext: renderCtx, viewport });
+        await renderTask.promise;
+        if (cancelled || renderVersion !== renderVersionRef.current) return;
 
-      // Cache the PDF background
-      pdfBackgroundRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const canvas = canvasRef.current!;
+        canvas.width = renderCanvas.width;
+        canvas.height = renderCanvas.height;
 
-      setPdfRenderData({
-        canvasWidth: viewport.width,
-        canvasHeight: viewport.height,
-        pdfWidth: viewport.width,
-        pdfHeight: viewport.height,
-      });
+        const ctx = canvas.getContext('2d')!;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(renderCanvas, 0, 0);
+
+        page.cleanup?.();
+        pdfBackgroundRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        setPdfRenderData({
+          canvasWidth: viewport.width,
+          canvasHeight: viewport.height,
+          pdfWidth: viewport.width,
+          pdfHeight: viewport.height,
+        });
+      } catch (err) {
+        if (!cancelled && (err as Error).name !== 'RenderingCancelledException') {
+          console.error(err);
+        }
+      }
     };
 
     renderPdfToCache();
+
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
   }, [pdfDoc, currentPage]);
 
   /* ── redraw overlays whenever state changes (fast) ──────────────── */
@@ -208,7 +262,7 @@ export default function EditorPage() {
     ctx.putImageData(pdfBackgroundRef.current, 0, 0);
 
     // Draw placed images
-    for (const img of placedImages) {
+    for (const img of placedImages.filter((image) => image.visible)) {
       const imageEl = imagesCache[img.id] || (() => {
         const im = new Image();
         im.src = img.src;
@@ -241,7 +295,7 @@ export default function EditorPage() {
 
     // Draw selection border if selected
     if (selectedImageId) {
-      const img = placedImages.find((i) => i.id === selectedImageId);
+      const img = placedImages.find((i) => i.id === selectedImageId && i.visible);
       if (img && !img.confirmed) {
         const rot = ((img.rotation || 0) * Math.PI) / 180;
         const cx = img.x + img.width / 2;
@@ -315,7 +369,7 @@ export default function EditorPage() {
       setPdfDoc(pdf);
       setPageCount(pdf.numPages);
       setCurrentPage(1);
-      setPlacedImages([]);
+      setImagesByPage({});
       setSelectedImageId(null);
       // clear history on new PDF
       historyRef.current.past = [];
@@ -350,14 +404,18 @@ export default function EditorPage() {
 
           const newImg: PlacedImage = {
             id: Math.random().toString(36).substring(2, 11),
+            name: `Imagem ${totalPlacedImages + offsetIndex + 1}`,
             src: reader.result as string,
             x: (pdfRenderData.canvasWidth - w) / 2 + offset,
             y: (pdfRenderData.canvasHeight - h) / 2 + offset,
             width: w,
             height: h,
+            canvasWidth: pdfRenderData.canvasWidth,
+            canvasHeight: pdfRenderData.canvasHeight,
             naturalWidth: img.naturalWidth,
             naturalHeight: img.naturalHeight,
             confirmed: false,
+            visible: true,
             rotation: 0,
           };
 
@@ -458,6 +516,7 @@ export default function EditorPage() {
   }
 
   function hitTestImage(mx: number, my: number, img: PlacedImage): boolean {
+    if (!img.visible) return false;
     const local = worldToLocal(mx, my, img);
     return (
       local.x >= -img.width / 2 &&
@@ -561,6 +620,20 @@ export default function EditorPage() {
 
     // Clicked empty area
     setSelectedImageId(null);
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    const { x, y } = getCanvasCoords(e);
+    const target = [...placedImages].reverse().find((img) => hitTestImage(x, y, img));
+    if (!target) return;
+
+    if (target.confirmed) {
+      unconfirmImage(target.id);
+      return;
+    }
+
+    setSelectedImageId(target.id);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -743,21 +816,10 @@ export default function EditorPage() {
 
   /* ── wheel event for scroll/zoom navigation ─────────────────── */
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    // Ctrl+scroll: zoom
     if (e.ctrlKey) {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -0.1 : 0.1;
       setZoom((z) => Math.max(0.3, Math.min(3, z + delta)));
-    // Regular scroll: navigate pages
-    } else if (!e.shiftKey) {
-      e.preventDefault();
-      if (e.deltaY > 0) {
-        // Scroll down: next page
-        setCurrentPage((p) => Math.min(pageCount, p + 1));
-      } else {
-        // Scroll up: prev page
-        setCurrentPage((p) => Math.max(1, p - 1));
-      }
     }
   };
 
@@ -765,12 +827,14 @@ export default function EditorPage() {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (layerDragIdRef.current) return;
     setIsDraggingFile(true);
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (layerDragIdRef.current) return;
     setIsDraggingFile(true);
   };
 
@@ -792,6 +856,11 @@ export default function EditorPage() {
   const handleRootDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (layerDragIdRef.current) {
+      layerDragIdRef.current = null;
+      setIsDraggingFile(false);
+      return;
+    }
     setIsDraggingFile(false);
     void handleDroppedFiles(e.dataTransfer.files);
   };
@@ -816,50 +885,85 @@ export default function EditorPage() {
     if (selectedImageId === id) setSelectedImageId(null);
   };
 
+  const toggleImageVisibility = (id: string) => {
+    pushHistory();
+    setPlacedImages((prev) =>
+      prev.map((img) => (img.id === id ? { ...img, visible: !img.visible } : img))
+    );
+    setSelectedImageId(id);
+  };
+
+  const moveLayer = (id: string, direction: 'up' | 'down') => {
+    const index = placedImages.findIndex((img) => img.id === id);
+    if (index === -1) return;
+    const target = direction === 'up' ? index + 1 : index - 1;
+    if (target < 0 || target >= placedImages.length) return;
+
+    pushHistory();
+    setPlacedImages((prev) => {
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setSelectedImageId(id);
+  };
+
+  const moveLayerTo = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const from = placedImages.findIndex((img) => img.id === draggedId);
+    const to = placedImages.findIndex((img) => img.id === targetId);
+    if (from === -1 || to === -1) return;
+
+    pushHistory();
+    setPlacedImages((prev) => {
+      const next = [...prev];
+      const [dragged] = next.splice(from, 1);
+      next.splice(to, 0, dragged);
+      return next;
+    });
+    setSelectedImageId(draggedId);
+  };
+
   /* ── save edited PDF ────────────────────────────────────────── */
   const savePdf = async () => {
-    if (!pdfFile || placedImages.length === 0) return;
+    if (!pdfFile || totalPlacedImages === 0) return;
     setIsProcessing(true);
     try {
       const buf = await pdfFile.arrayBuffer();
       const pdfDoc = await PDFDocument.load(buf);
 
-      // Get the current page
-      const page = pdfDoc.getPage(currentPage - 1);
-      const { width: pageW, height: pageH } = page.getSize();
+      for (const [pageKey, pageImages] of Object.entries(imagesByPage)) {
+        if (pageImages.length === 0) continue;
+        const pageNumber = Number(pageKey);
+        const page = pdfDoc.getPage(pageNumber - 1);
+        const { width: pageW, height: pageH } = page.getSize();
 
-      // Calculate scale: PDF page size -> canvas size
-      if (!pdfRenderData) return;
-      const scaleX = pageW / pdfRenderData.canvasWidth;
-      const scaleY = pageH / pdfRenderData.canvasHeight;
+        for (const img of pageImages.filter((image) => image.visible)) {
+          const res = await fetch(img.src);
+          const imgBytes = new Uint8Array(await res.arrayBuffer());
 
-      for (const img of placedImages) {
-        // Convert dataURL to bytes
-        const res = await fetch(img.src);
-        const imgBytes = new Uint8Array(await res.arrayBuffer());
+          let embeddedImg;
+          try {
+            embeddedImg = await pdfDoc.embedPng(imgBytes);
+          } catch {
+            embeddedImg = await pdfDoc.embedJpg(imgBytes);
+          }
 
-        // Try PNG first, then JPG
-        let embeddedImg;
-        try {
-          embeddedImg = await pdfDoc.embedPng(imgBytes);
-        } catch {
-          embeddedImg = await pdfDoc.embedJpg(imgBytes);
+          const scaleX = pageW / img.canvasWidth;
+          const scaleY = pageH / img.canvasHeight;
+          const pdfX = img.x * scaleX;
+          const pdfY = pageH - (img.y + img.height) * scaleY;
+          const pdfW = img.width * scaleX;
+          const pdfH = img.height * scaleY;
+
+          page.drawImage(embeddedImg, {
+            x: pdfX,
+            y: pdfY,
+            width: pdfW,
+            height: pdfH,
+            rotate: degrees(img.rotation || 0),
+          });
         }
-
-        // Convert canvas coords to PDF coords
-        // PDF: bottom-left origin. Canvas: top-left origin.
-        const pdfX = img.x * scaleX;
-        const pdfY = pageH - (img.y + img.height) * scaleY;
-        const pdfW = img.width * scaleX;
-        const pdfH = img.height * scaleY;
-
-        page.drawImage(embeddedImg, {
-          x: pdfX,
-          y: pdfY,
-          width: pdfW,
-          height: pdfH,
-          rotate: degrees(img.rotation || 0),
-        });
       }
 
       const bytes = await pdfDoc.save();
@@ -893,14 +997,14 @@ export default function EditorPage() {
   const headerLayout = {
     className: 'mr-4',
     style: {
-      width: 'calc(100vw - 17rem)',
+      width: 'calc(100vw - 18rem)',
       marginLeft: '17rem',
     } as React.CSSProperties,
   };
 
   return (
     <div
-      className="min-h-screen bg-background text-foreground font-sans flex flex-col"
+      className="h-screen overflow-hidden bg-background text-foreground font-sans flex flex-col"
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -912,7 +1016,7 @@ export default function EditorPage() {
         iconClassName="bg-emerald-600"
         contentClassName={headerLayout.className}
         contentStyle={headerLayout.style}
-        actions={pdfDoc && placedImages.length > 0 && (
+        actions={pdfDoc && totalPlacedImages > 0 && (
           <>
             <Button
               variant="ghost"
@@ -951,9 +1055,9 @@ export default function EditorPage() {
       />
 
       {/* Main content */}
-      <div className="flex-1 flex w-full">
+      <div className="flex-1 min-h-0 flex w-full overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 bg-zinc-900/80 border-r border-zinc-800 p-4 flex flex-col gap-4">
+        <aside className="w-64 shrink-0 min-h-0 bg-zinc-900/80 border-r border-zinc-800 p-4 flex flex-col gap-4 overflow-hidden">
           {/* Upload PDF */}
           <div>
             <input
@@ -983,8 +1087,8 @@ export default function EditorPage() {
               {/* Page navigation */}
               {pageCount > 1 && (
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                    PÃ¡ginas do PDF
+                  <p className="text-center text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                    Paginas do PDF
                   </p>
                   <div className="flex items-center justify-between">
                     <Button
@@ -1022,7 +1126,7 @@ export default function EditorPage() {
                 />
                 <Button
                   variant="outline"
-                          className="w-full gap-2 border-dashed border-2 border-zinc-700 hover:border-emerald-400 hover:text-emerald-400"
+                  className="w-full gap-2 border-dashed border-2 border-zinc-700 hover:border-emerald-400 hover:text-emerald-400"
                   onClick={() => imgInputRef.current?.click()}
                 >
                   <ImagePlus className="w-4 h-4" />
@@ -1105,15 +1209,46 @@ export default function EditorPage() {
                   <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                     Camadas ({placedImages.length})
                   </p>
-                  {placedImages.map((img, idx) => (
+                  {[...placedImages].reverse().map((img) => {
+                    const layerIndex = placedImages.findIndex((item) => item.id === img.id);
+                    const isTopLayer = layerIndex === placedImages.length - 1;
+                    const isBottomLayer = layerIndex === 0;
+
+                    return (
                     <div
                       key={img.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        layerDragIdRef.current = img.id;
+                        e.dataTransfer.effectAllowed = 'move';
+                        setIsDraggingFile(false);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const draggedId = layerDragIdRef.current;
+                        layerDragIdRef.current = null;
+                        setIsDraggingFile(false);
+                        if (draggedId) moveLayerTo(draggedId, img.id);
+                      }}
+                      onDragEnd={(e) => {
+                        e.stopPropagation();
+                        layerDragIdRef.current = null;
+                        setIsDraggingFile(false);
+                      }}
                       onClick={() => setSelectedImageId(img.id)}
                       className={cn(
-                        'flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors text-xs',
+                        'flex items-center gap-2 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-colors text-xs',
                         selectedImageId === img.id
                           ? 'bg-indigo-500/15 text-indigo-200 border border-indigo-500/30'
-                          : 'hover:bg-zinc-800 text-zinc-300 border border-transparent'
+                          : 'hover:bg-zinc-800 text-zinc-300 border border-transparent',
+                        !img.visible && 'opacity-55'
                       )}
                     >
                       <img
@@ -1121,14 +1256,44 @@ export default function EditorPage() {
                         alt=""
                         className="w-8 h-8 rounded object-cover border border-zinc-700"
                       />
-                      <span className="truncate flex-1">Imagem {idx + 1}</span>
-                      {img.confirmed ? (
-                        <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Move className="w-3 h-3 text-amber-500 shrink-0" />
-                      )}
+                      <span className="truncate flex-1">{img.name}</span>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={isTopLayer}
+                          onClick={(e) => { e.stopPropagation(); moveLayer(img.id, 'up'); }}
+                          className="h-6 w-6 p-0 text-zinc-500 hover:text-indigo-300 disabled:opacity-30"
+                          title="Trazer para frente"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={isBottomLayer}
+                          onClick={(e) => { e.stopPropagation(); moveLayer(img.id, 'down'); }}
+                          className="h-6 w-6 p-0 text-zinc-500 hover:text-indigo-300 disabled:opacity-30"
+                          title="Enviar para tras"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); toggleImageVisibility(img.id); }}
+                        className={cn(
+                          'h-6 w-6 p-0 disabled:opacity-30',
+                          img.visible ? 'text-zinc-400 hover:text-emerald-300' : 'text-zinc-600 hover:text-zinc-300'
+                        )}
+                        title={img.visible ? 'Ocultar imagem' : 'Mostrar imagem'}
+                      >
+                        {img.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      </Button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -1136,7 +1301,7 @@ export default function EditorPage() {
         </aside>
 
         {/* Canvas area */}
-        <main className="flex-1 bg-background overflow-auto flex items-start justify-center p-8 relative">
+        <main className="flex-1 min-w-0 min-h-0 bg-background overflow-auto flex items-start justify-center p-6 relative">
           {isDraggingFile && (
             <div className="absolute inset-0 z-20 m-4 rounded-2xl border-2 border-dashed border-indigo-400 bg-indigo-50/80 backdrop-blur-sm flex items-center justify-center text-indigo-700 pointer-events-none">
               <div className="text-center">
@@ -1167,6 +1332,7 @@ export default function EditorPage() {
               <canvas
                 ref={canvasRef}
                 onMouseDown={handleMouseDown}
+                onDoubleClick={handleDoubleClick}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
@@ -1180,7 +1346,7 @@ export default function EditorPage() {
                   mode === 'dragging' && 'cursor-move',
                   mode === 'resizing' && 'cursor-nwse-resize'
                 )}
-                style={{ maxWidth: '100%' }}
+                style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 7rem)' }}
               />
             </div>
           )}
