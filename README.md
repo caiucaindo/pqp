@@ -2,7 +2,7 @@
 
 ## PDF Que Pariu
 
-Uma aplicação desktop para editar PDFs.
+Uma aplicação desktop para manipular e editar PDFs.
 
 ## Funcionalidades
 
