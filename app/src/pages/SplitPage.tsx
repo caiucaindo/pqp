@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { PDFDocument, degrees } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
 import {
@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { downloadBytes, downloadPdf } from '@/lib/download';
 import { createZip } from '@/lib/zip';
 import { PageHeader, pageContentLayout } from '@/components/PageHeader';
+import { dragHasFiles, dragLooksLikePdf, isPdfFile } from '@/lib/fileTypes';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -144,18 +145,19 @@ export default function SplitPage() {
   const [cutsAfter, setCutsAfter] = useState<boolean[]>([]);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isInvalidDrag, setIsInvalidDrag] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const appendModeRef = useRef(false);
   const standardContentLayout = pageContentLayout('standard');
   const wideContentLayout = pageContentLayout('wide');
-  const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
+    setIsInvalidDrag(!dragLooksLikePdf(e));
     setIsDragging(true);
   }, []);
 
@@ -165,6 +167,7 @@ export default function SplitPage() {
     e.stopPropagation();
     if (e.currentTarget === e.target) {
       setIsDragging(false);
+      setIsInvalidDrag(false);
     }
   }, []);
 
@@ -237,20 +240,46 @@ export default function SplitPage() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    const dropped = Array.from(e.dataTransfer.files).find((f) => f.type === 'application/pdf');
+    setIsInvalidDrag(false);
+    const dropped = Array.from(e.dataTransfer.files).find(isPdfFile);
     if (dropped) {
       void loadPdf(dropped, Boolean(sourceFileName && pages.length > 0));
+      return;
     }
+    alert('Arquivo não aceito. Use apenas PDFs.');
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
+    if (!isPdfFile(selected)) {
+      alert('Arquivo não aceito. Use apenas PDFs.');
+      e.target.value = '';
+      return;
+    }
     const append = appendModeRef.current;
     appendModeRef.current = false;
     void loadPdf(selected, append);
     e.target.value = '';
   };
+
+  useEffect(() => {
+    const clearExternalDrag = () => {
+      setIsDragging(false);
+      setIsInvalidDrag(false);
+    };
+
+    window.addEventListener('drop', clearExternalDrag);
+    window.addEventListener('dragend', clearExternalDrag);
+    window.addEventListener('blur', clearExternalDrag);
+    document.addEventListener('visibilitychange', clearExternalDrag);
+    return () => {
+      window.removeEventListener('drop', clearExternalDrag);
+      window.removeEventListener('dragend', clearExternalDrag);
+      window.removeEventListener('blur', clearExternalDrag);
+      document.removeEventListener('visibilitychange', clearExternalDrag);
+    };
+  }, []);
 
   const removeAllFiles = () => {
     setSourceFileName(null);
@@ -423,7 +452,7 @@ export default function SplitPage() {
                       className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-md"
                     >
                       {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                      <span className="hidden sm:inline text-sm">Baixar selecionadas</span>
+                      <span className="hidden sm:inline text-sm">Baixar Selecionadas</span>
                     </Button>
                   )}
                   <Button
@@ -460,7 +489,9 @@ export default function SplitPage() {
             }}
             className={cn(
               'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200',
-              isDragging
+              isDragging && isInvalidDrag
+                ? 'border-red-500 bg-red-500/10 scale-[1.02]'
+                : isDragging
                 ? 'border-amber-500 bg-amber-500/10 scale-[1.02]'
                 : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/60'
             )}
@@ -473,11 +504,11 @@ export default function SplitPage() {
               className="hidden"
             />
             <div className="flex flex-col items-center gap-3">
-              <div className={cn('p-3 rounded-full transition-colors', isDragging ? 'bg-amber-500/20' : 'bg-zinc-800')}>
-                <Upload className={cn('w-8 h-8 transition-colors', isDragging ? 'text-amber-300' : 'text-zinc-400')} />
+              <div className={cn('p-3 rounded-full transition-colors', isDragging && isInvalidDrag ? 'bg-red-500/20' : isDragging ? 'bg-amber-500/20' : 'bg-zinc-800')}>
+                <Upload className={cn('w-8 h-8 transition-colors', isDragging && isInvalidDrag ? 'text-red-300' : isDragging ? 'text-amber-300' : 'text-zinc-400')} />
               </div>
               <div>
-                <p className="text-base font-medium text-zinc-200">{isDragging ? 'Solte o PDF aqui' : 'Arraste um PDF ou clique para escolher'}</p>
+                <p className="text-base font-medium text-zinc-200">{isDragging && isInvalidDrag ? 'Isso não é um PDF' : isDragging ? 'Basta Soltar' : 'Arraste um PDF ou clique para escolher'}</p>
                 <p className="text-sm text-zinc-500 mt-1">Selecione um arquivo PDF para separar as páginas</p>
               </div>
             </div>
@@ -493,22 +524,22 @@ export default function SplitPage() {
 
         {sourceFileName && pages.length > 0 && !isLoading && (
           <div>
-            <p className="text-sm text-zinc-500 mb-4">Clique para selecionar páginas específicas.</p>
+            <p className="text-sm text-zinc-500 mb-4">Clique para selecionar páginas.</p>
             <div className="grid grid-cols-[repeat(auto-fill,260px)] gap-x-3 gap-y-4 pb-3">
               {pages.map((page, index) => (
                 <div key={page.id} className="relative w-[260px]">
                   <Card
                     onClick={() => toggleSelect(page.id)}
                     className={cn(
-                      'w-[220px] bg-zinc-900/60 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all cursor-pointer',
+                      'w-[220px] h-[420px] bg-zinc-900/60 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all cursor-pointer',
                       page.selected ? 'ring-4 ring-blue-500' : ''
                     )}
                   >
-                    <CardContent className="p-3 space-y-2.5">
+                    <CardContent className="h-full p-3 flex flex-col justify-center gap-2.5">
                       <div className="relative">
                         <div
                           className={cn(
-                            'h-64 rounded-lg border border-zinc-800 bg-zinc-950 overflow-hidden flex items-center justify-center transition-transform duration-300',
+                            'h-56 rounded-lg border border-zinc-800 bg-zinc-950 overflow-hidden flex items-center justify-center transition-transform duration-300',
                             page.rotation === 90 && 'rotate-90',
                             page.rotation === 180 && 'rotate-180',
                             page.rotation === 270 && '-rotate-90'
@@ -627,7 +658,7 @@ export default function SplitPage() {
                     >
                       <span
                         className={cn(
-                          'h-[88%] transition-all duration-150 group-hover:w-[4px]',
+                          'h-full transition-all duration-150 group-hover:w-[4px]',
                           (cutsAfter[index] ?? true) ? 'w-[2px] bg-blue-600/90' : 'w-[2px] bg-zinc-700/80 group-hover:bg-zinc-500'
                         )}
                       />
@@ -655,7 +686,14 @@ export default function SplitPage() {
                 <button
                   type="button"
                   onClick={triggerAddPdf}
-                  className="w-[220px] min-h-[420px] rounded-lg border border-dashed border-zinc-700 bg-zinc-900/50 hover:bg-zinc-800/70 transition-colors flex flex-col items-center justify-center gap-2 text-zinc-300"
+                  className={cn(
+                    'w-[220px] h-[420px] rounded-lg border border-dashed bg-zinc-900/50 hover:bg-zinc-800/70 transition-colors flex flex-col items-center justify-center gap-2 text-zinc-300',
+                    isDragging && isInvalidDrag
+                      ? 'border-red-500 bg-red-500/10'
+                      : isDragging
+                      ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-900/20'
+                      : 'border-zinc-700'
+                  )}
                 >
                   <div className="w-8 h-8 rounded-full border border-zinc-500 flex items-center justify-center">
                     <Plus className="w-4 h-4" />
@@ -681,7 +719,7 @@ export default function SplitPage() {
           onClick={() => setPreview(null)}
         >
           <div
-            className="relative max-h-[92vh] max-w-4xl w-full rounded-lg border border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden"
+            className="relative max-h-[92vh] max-w-[95vw] w-fit rounded-lg border border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="h-12 px-4 border-b border-zinc-800 flex items-center justify-between">
@@ -698,7 +736,7 @@ export default function SplitPage() {
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            <div className="max-h-[calc(92vh-3rem)] overflow-auto bg-zinc-950 p-4 flex justify-center">
+            <div className="max-h-[calc(92vh-3rem)] max-w-[95vw] overflow-auto bg-zinc-950 p-4 flex justify-center">
               {preview.loading ? (
                 <div className="h-96 flex flex-col items-center justify-center text-zinc-400">
                   <Loader2 className="w-8 h-8 animate-spin mb-3 text-amber-500" />
@@ -709,7 +747,7 @@ export default function SplitPage() {
                   src={preview.image}
                   alt={`Página ${preview.page.pageNumber}`}
                   className={cn(
-                    'max-w-full h-auto bg-white rounded shadow-lg',
+                    'max-w-[92vw] max-h-[calc(92vh-5rem)] w-auto h-auto bg-white rounded shadow-lg',
                     preview.page.rotation === 90 && 'rotate-90',
                     preview.page.rotation === 180 && 'rotate-180',
                     preview.page.rotation === 270 && '-rotate-90'

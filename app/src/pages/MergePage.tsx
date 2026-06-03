@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { PDFDocument, degrees } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
 import { generateThumbnail } from '@/utils/thumbnail';
 import {
   Upload,
@@ -16,6 +17,9 @@ import {
   Loader2,
   Settings2,
   Download,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +27,12 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { downloadPdf } from '@/lib/download';
 import { PageHeader, pageContentLayout } from '@/components/PageHeader';
+import { dragHasFiles, dragLooksLikePdf, isPdfFile } from '@/lib/fileTypes';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).href;
 
 /* ── types ────────────────────────────────────────────────────── */
 interface PdfFile {
@@ -33,7 +43,16 @@ interface PdfFile {
   rotation: number; // 0 | 90 | 180 | 270
   pageCount?: number;
   thumbnail?: string;
+  pageWidth?: number;
+  pageHeight?: number;
   order: number;
+}
+
+interface PreviewState {
+  file: PdfFile;
+  pageNumber: number;
+  image?: string;
+  loading: boolean;
 }
 
 /* ── helpers ──────────────────────────────────────────────────── */
@@ -57,6 +76,26 @@ async function prepareRotatedPdf(file: File, rotation: number): Promise<PDFDocum
   return src;
 }
 
+async function generatePdfPageImage(file: File, pageNumber: number, scale = 1.35): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  const page = await pdf.getPage(pageNumber);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+  page.cleanup?.();
+  loadingTask.destroy?.();
+  return dataUrl;
+}
+
 /* ── A4 dimensions in PDF points ─────────────────────────────── */
 const A4_W = 595.28;
 const A4_H = 841.89;
@@ -65,18 +104,23 @@ const A4_H = 841.89;
 export default function MergePage() {
   const [files, setFiles] = useState<PdfFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isInvalidDrag, setIsInvalidDrag] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [fileDropIndex, setFileDropIndex] = useState<number | null>(null);
   const [standardizeSize, setStandardizeSize] = useState(false);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastFileDragAtRef = useRef(0);
   const contentLayout = pageContentLayout('standard');
-  const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes('Files');
 
   /* ── drag & drop (global upload zone) ───────────────────────── */
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
+    lastFileDragAtRef.current = Date.now();
+    setIsInvalidDrag(!dragLooksLikePdf(e));
     setIsDragging(true);
   }, []);
 
@@ -86,40 +130,95 @@ export default function MergePage() {
     e.stopPropagation();
     if (e.currentTarget === e.target) {
       setIsDragging(false);
+      setIsInvalidDrag(false);
+      setFileDropIndex(null);
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent, insertIndex?: number) => {
     if (!dragHasFiles(e)) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    setIsInvalidDrag(false);
+    setFileDropIndex(null);
     const dropped = Array.from(e.dataTransfer.files).filter(
-      (f) => f.type === 'application/pdf'
+      isPdfFile
     );
-    addFiles(dropped);
+    if (dropped.length === 0) {
+      alert('Arquivo não aceito. Use apenas PDFs.');
+      return;
+    }
+    addFiles(dropped, insertIndex);
   }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const selected = Array.from(e.target.files).filter((f) => f.type === 'application/pdf');
+    const selected = Array.from(e.target.files).filter(isPdfFile);
+    if (selected.length === 0) {
+      alert('Arquivo não aceito. Use apenas PDFs.');
+      e.target.value = '';
+      return;
+    }
     addFiles(selected);
     e.target.value = '';
   }, []);
 
+  useEffect(() => {
+    const clearExternalDrag = () => {
+      setIsDragging(false);
+      setIsInvalidDrag(false);
+      setFileDropIndex(null);
+      lastFileDragAtRef.current = 0;
+    };
+    const clearWhenLeavingWindow = (event: DragEvent) => {
+      if (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight) {
+        clearExternalDrag();
+      }
+    };
+    const staleDragTimer = window.setInterval(() => {
+      if (lastFileDragAtRef.current > 0 && Date.now() - lastFileDragAtRef.current > 450) {
+        clearExternalDrag();
+        lastFileDragAtRef.current = 0;
+      }
+    }, 180);
+
+    window.addEventListener('drop', clearExternalDrag);
+    window.addEventListener('dragend', clearExternalDrag);
+    window.addEventListener('blur', clearExternalDrag);
+    window.addEventListener('mouseleave', clearExternalDrag);
+    document.addEventListener('dragleave', clearWhenLeavingWindow);
+    document.addEventListener('visibilitychange', clearExternalDrag);
+    return () => {
+      window.removeEventListener('drop', clearExternalDrag);
+      window.removeEventListener('dragend', clearExternalDrag);
+      window.removeEventListener('blur', clearExternalDrag);
+      window.removeEventListener('mouseleave', clearExternalDrag);
+      document.removeEventListener('dragleave', clearWhenLeavingWindow);
+      document.removeEventListener('visibilitychange', clearExternalDrag);
+      window.clearInterval(staleDragTimer);
+    };
+  }, []);
+
   /* ── add files (parse pages + thumbnail) ────────────────────── */
-  const addFiles = async (newFiles: File[]) => {
-    const baseOrder = files.length;
+  const addFiles = async (newFiles: File[], insertIndex?: number) => {
     const tmpFiles: PdfFile[] = newFiles.map((file, i) => ({
       id: Math.random().toString(36).substring(2, 11),
       file,
       name: file.name,
       size: formatBytes(file.size),
       rotation: 0,
-      order: baseOrder + i,
+      order: i,
     }));
 
-    setFiles((prev) => [...prev, ...tmpFiles]);
+    setFiles((prev) => {
+      const targetIndex = insertIndex === undefined
+        ? prev.length
+        : Math.max(0, Math.min(insertIndex, prev.length));
+      const next = [...prev];
+      next.splice(targetIndex, 0, ...tmpFiles);
+      return next.map((file, index) => ({ ...file, order: index }));
+    });
 
     await Promise.all(
       tmpFiles.map(async (pdfFile) => {
@@ -127,6 +226,8 @@ export default function MergePage() {
           const buf = await pdfFile.file.arrayBuffer();
           const pdf = await PDFDocument.load(buf);
           const pageCount = pdf.getPageCount();
+          const firstPage = pdf.getPage(0);
+          const { width: pageWidth, height: pageHeight } = firstPage.getSize();
           let thumbnail: string | undefined;
           try {
             thumbnail = await generateThumbnail(pdfFile.file);
@@ -135,7 +236,7 @@ export default function MergePage() {
           }
           setFiles((prev) =>
             prev.map((f) =>
-              f.id === pdfFile.id ? { ...f, pageCount, thumbnail } : f
+              f.id === pdfFile.id ? { ...f, pageCount, pageWidth, pageHeight, thumbnail } : f
             )
           );
         } catch {
@@ -166,6 +267,28 @@ export default function MergePage() {
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, rotation } : f)));
   };
 
+  const suggestA4Rotation = (pdfFile: PdfFile) => {
+    if (!pdfFile.pageWidth || !pdfFile.pageHeight) return pdfFile.rotation;
+    const originalLandscape = pdfFile.pageWidth > pdfFile.pageHeight;
+    const normalized = ((pdfFile.rotation % 360) + 360) % 360;
+    const sidewayRotation = normalized === 90 || normalized === 270;
+
+    if (originalLandscape && !sidewayRotation) return 90;
+    if (!originalLandscape && sidewayRotation) return 0;
+    return normalized;
+  };
+
+  const handleStandardizeChange = (checked: boolean) => {
+    setStandardizeSize(checked);
+    if (!checked) return;
+    setFiles((prev) =>
+      prev.map((pdfFile) => ({
+        ...pdfFile,
+        rotation: suggestA4Rotation(pdfFile),
+      }))
+    );
+  };
+
   const moveFile = (index: number, direction: 'up' | 'down') => {
     if (direction === 'up' && index === 0) return;
     if (direction === 'down' && index === files.length - 1) return;
@@ -183,6 +306,18 @@ export default function MergePage() {
   };
 
   const handleDragOverItem = (e: React.DragEvent, index: number) => {
+    if (dragHasFiles(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      lastFileDragAtRef.current = Date.now();
+      setIsInvalidDrag(!dragLooksLikePdf(e));
+      setIsDragging(true);
+      const rect = e.currentTarget.getBoundingClientRect();
+      const insertIndex = e.clientY > rect.top + rect.height / 2 ? index + 1 : index;
+      setFileDropIndex(insertIndex);
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
     setDragOverIndex(index);
@@ -191,6 +326,13 @@ export default function MergePage() {
   const handleDropItem = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
     e.stopPropagation();
+    if (dragHasFiles(e)) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const insertIndex = e.clientY > rect.top + rect.height / 2 ? dropIndex + 1 : dropIndex;
+      handleDrop(e, insertIndex);
+      return;
+    }
+
     const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
     if (dragIndex === dropIndex || isNaN(dragIndex)) {
       setDragOverIndex(null);
@@ -201,9 +343,55 @@ export default function MergePage() {
     next.splice(dropIndex, 0, removed);
     setFiles(next.map((f, i) => ({ ...f, order: i })));
     setDragOverIndex(null);
+    setFileDropIndex(null);
+  };
+
+  const handleFileListDragOver = (e: React.DragEvent) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    lastFileDragAtRef.current = Date.now();
+    setIsInvalidDrag(!dragLooksLikePdf(e));
+    setIsDragging(true);
+    setFileDropIndex(files.length);
   };
 
   const clearAll = () => setFiles([]);
+
+  const openPreview = async (pdfFile: PdfFile, pageNumber = 1) => {
+    setPreview((current) => ({
+      file: pdfFile,
+      pageNumber,
+      image: current?.file.id === pdfFile.id ? current.image : undefined,
+      loading: true,
+    }));
+    try {
+      const image = await generatePdfPageImage(pdfFile.file, pageNumber);
+      setPreview((current) =>
+        current?.file.id === pdfFile.id && current.pageNumber === pageNumber
+          ? { ...current, image, loading: false }
+          : current
+      );
+    } catch (err) {
+      console.error(err);
+      setPreview((current) =>
+        current?.file.id === pdfFile.id && current.pageNumber === pageNumber
+          ? { ...current, loading: false }
+          : current
+      );
+      alert('Erro ao carregar visualização do PDF.');
+    }
+  };
+
+  const goToPreviewPage = (direction: 'prev' | 'next') => {
+    if (!preview) return;
+    const pageCount = preview.file.pageCount ?? 1;
+    const nextPage = direction === 'prev'
+      ? Math.max(1, preview.pageNumber - 1)
+      : Math.min(pageCount, preview.pageNumber + 1);
+    if (nextPage === preview.pageNumber) return;
+    void openPreview(preview.file, nextPage);
+  };
 
   /* ── download single (rotated) PDF ──────────────────────────── */
   const downloadSingle = async (pdfFile: PdfFile) => {
@@ -286,6 +474,37 @@ export default function MergePage() {
     }
   };
 
+  const rotationTransform = (rotation: number, scaleWhenSideways = 0.74) => {
+    const normalized = ((rotation % 360) + 360) % 360;
+    if (normalized === 0) return undefined;
+    const scale = normalized === 90 || normalized === 270 ? ` scale(${scaleWhenSideways})` : '';
+    return `rotate(${normalized}deg)${scale}`;
+  };
+
+  const getThumbLayout = (pdfFile: PdfFile) => {
+    const rotation = ((pdfFile.rotation % 360) + 360) % 360;
+    const originalLandscape = (pdfFile.pageWidth ?? 0) > (pdfFile.pageHeight ?? 0);
+    const sourceBase = originalLandscape
+      ? { width: 160, height: 120 }
+      : { width: 120, height: 160 };
+    const sideways = rotation === 90 || rotation === 270;
+    const visualLandscape = sideways ? !originalLandscape : originalLandscape;
+    const scale = visualLandscape ? 0.94 : 1;
+    const source = {
+      width: sourceBase.width * scale,
+      height: sourceBase.height * scale,
+    };
+    const frame = sideways
+      ? { width: source.height, height: source.width }
+      : source;
+
+    return {
+      frame,
+      source,
+      transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+    };
+  };
+
   /* ── render ──────────────────────────────────────────────────── */
   return (
     <div
@@ -324,7 +543,9 @@ export default function MergePage() {
           onClick={() => fileInputRef.current?.click()}
           className={cn(
             'border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200',
-            isDragging
+            isDragging && isInvalidDrag
+              ? 'border-red-500 bg-red-500/10 scale-[1.02]'
+              : isDragging
               ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
               : 'border-zinc-700 bg-zinc-900 hover:border-zinc-600 hover:bg-zinc-800/60'
           )}
@@ -341,28 +562,32 @@ export default function MergePage() {
             <div
               className={cn(
                 'p-3 rounded-full transition-colors',
-                isDragging ? 'bg-indigo-500/20' : 'bg-zinc-800'
+                isDragging && isInvalidDrag ? 'bg-red-500/20' : isDragging ? 'bg-indigo-500/20' : 'bg-zinc-800'
               )}
             >
               <Upload
                 className={cn(
                   'w-8 h-8 transition-colors',
-                  isDragging ? 'text-indigo-300' : 'text-zinc-400'
+                  isDragging && isInvalidDrag ? 'text-red-300' : isDragging ? 'text-indigo-300' : 'text-zinc-400'
                 )}
               />
             </div>
             <div>
               <p className="text-base font-medium text-zinc-200">
-                {isDragging ? 'Solte os PDFs aqui' : 'Arraste PDFs ou clique para escolher'}
+                {isDragging && isInvalidDrag ? 'Isso não é um PDF' : isDragging ? 'Basta Soltar' : 'Arraste PDFs ou clique para escolher'}
               </p>
-              <p className="text-sm text-zinc-500 mt-1">Aceita múltiplos arquivos PDF</p>
+              <p className="text-sm text-zinc-500 mt-1">Aceita múltiplos PDFs</p>
             </div>
           </div>
         </div>
 
         {/* File list */}
         {files.length > 0 && (
-          <div className="mt-8 space-y-3">
+          <div
+            className="mt-8 space-y-3"
+            onDragOver={handleFileListDragOver}
+            onDrop={(e) => handleDrop(e, fileDropIndex ?? files.length)}
+          >
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider">
                 Arquivos
@@ -371,17 +596,27 @@ export default function MergePage() {
             </div>
 
             {files.map((pdfFile, index) => (
+              <div key={pdfFile.id} className="space-y-2">
+              {isDragging && !isInvalidDrag && fileDropIndex === index && (
+                <div className="h-1 rounded-full bg-indigo-500/70 shadow-sm shadow-indigo-900/40" />
+              )}
               <Card
-                key={pdfFile.id}
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
                 onDragOver={(e) => handleDragOverItem(e, index)}
                 onDrop={(e) => handleDropItem(e, index)}
+                onDragEnd={() => {
+                  setDragOverIndex(null);
+                  setFileDropIndex(null);
+                  setIsDragging(false);
+                  setIsInvalidDrag(false);
+                }}
                 className={cn(
                   'group cursor-move transition-all duration-150 border-l-4',
                   dragOverIndex === index
                     ? 'border-l-indigo-500 shadow-md scale-[1.01]'
                     : 'border-l-transparent',
+                  isDragging && !isInvalidDrag && fileDropIndex !== null && 'ring-1 ring-indigo-500/10',
                   'hover:shadow-sm'
                 )}
               >
@@ -392,29 +627,49 @@ export default function MergePage() {
                   </div>
 
                   {/* Thumbnail */}
-                  <div className="shrink-0 relative">
-                    <div
-                      className={cn(
-                        'w-24 h-32 rounded-lg border border-zinc-800 bg-zinc-950 overflow-hidden flex items-center justify-center transition-transform duration-300',
-                        pdfFile.rotation === 90 && 'rotate-90',
-                        pdfFile.rotation === 180 && 'rotate-180',
-                        pdfFile.rotation === 270 && '-rotate-90'
-                      )}
+                  <div className="w-40 h-40 shrink-0 relative flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); void openPreview(pdfFile); }}
+                      className="rounded-md bg-transparent p-0 overflow-visible flex items-center justify-center"
+                      aria-label="Visualizar PDF"
                     >
                       {pdfFile.thumbnail ? (
-                        <img
-                          src={pdfFile.thumbnail}
-                          alt=""
-                          className="w-full h-full object-contain"
-                          draggable={false}
-                        />
+                        (() => {
+                          const thumbLayout = getThumbLayout(pdfFile);
+                          return (
+                            <span
+                              className="relative block rounded-md transition-transform duration-200 hover:scale-[1.03] hover:ring-1 hover:ring-indigo-400/50"
+                              style={{
+                                width: thumbLayout.frame.width,
+                                height: thumbLayout.frame.height,
+                              }}
+                            >
+                              <span
+                                className="absolute left-1/2 top-1/2 block overflow-hidden rounded bg-white shadow-md shadow-zinc-950/30"
+                                style={{
+                                  width: thumbLayout.source.width,
+                                  height: thumbLayout.source.height,
+                                  transform: thumbLayout.transform,
+                                }}
+                              >
+                                <img
+                                  src={pdfFile.thumbnail}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                  draggable={false}
+                                />
+                              </span>
+                            </span>
+                          );
+                        })()
                       ) : (
                         <div className="flex flex-col items-center gap-1 text-zinc-500">
                           <Loader2 className="w-5 h-5 animate-spin" />
                           <span className="text-[10px]">Carregando…</span>
                         </div>
                       )}
-                    </div>
+                    </button>
                     {/* Rotation badge */}
                     <div className="absolute -bottom-1.5 -right-1.5 bg-indigo-600 text-white text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
                       {rotationLabel(pdfFile.rotation)}
@@ -497,6 +752,17 @@ export default function MergePage() {
                     <Download className="w-4 h-4" />
                   </Button>
 
+                  {/* Preview */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void openPreview(pdfFile)}
+                    className="text-zinc-600 hover:text-indigo-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Visualizar PDF"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+
                   {/* Remove */}
                   <Button
                     variant="ghost"
@@ -508,6 +774,10 @@ export default function MergePage() {
                   </Button>
                 </CardContent>
               </Card>
+              {isDragging && !isInvalidDrag && fileDropIndex === index + 1 && index === files.length - 1 && (
+                <div className="h-1 rounded-full bg-indigo-500/70 shadow-sm shadow-indigo-900/40" />
+              )}
+              </div>
             ))}
 
             {/* Merge controls */}
@@ -519,14 +789,14 @@ export default function MergePage() {
                     <Settings2 className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-zinc-200">Padronizar tamanho A4</p>
+                    <p className="text-sm font-medium text-zinc-200">Padronizar em A4</p>
                     <p className="text-xs text-zinc-500">
                       Todas as páginas sairão no formato A4, centralizadas e proporcionais
                     </p>
                   </div>
                   <Switch
                     checked={standardizeSize}
-                    onCheckedChange={setStandardizeSize}
+                    onCheckedChange={handleStandardizeChange}
                   />
                 </div>
 
@@ -568,6 +838,90 @@ export default function MergePage() {
           </div>
         )}
       </main>
+
+      {preview && (
+        <div
+          className="fixed inset-0 z-50 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPreview(null)}
+        >
+          <div
+            className="relative max-h-[92vh] max-w-[95vw] w-fit rounded-lg border border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-12 px-4 border-b border-zinc-800 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0 text-sm text-zinc-300">
+                <Eye className="w-4 h-4 text-indigo-300 shrink-0" />
+                <span className="truncate">{preview.file.name}</span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => goToPreviewPage('prev')}
+                  disabled={preview.pageNumber <= 1 || preview.loading}
+                  className="h-8 w-8 p-0 text-zinc-400 hover:text-indigo-300"
+                  title="Pagina anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="min-w-16 text-center text-xs text-zinc-400">
+                  {preview.pageNumber} / {preview.file.pageCount ?? 1}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => goToPreviewPage('next')}
+                  disabled={preview.pageNumber >= (preview.file.pageCount ?? 1) || preview.loading}
+                  className="h-8 w-8 p-0 text-zinc-400 hover:text-indigo-300"
+                  title="Proxima pagina"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPreview(null)}
+                  className="h-8 w-8 p-0 text-zinc-400 hover:text-red-400"
+                  title="Fechar"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="max-h-[calc(92vh-3rem)] max-w-[95vw] overflow-auto bg-zinc-950 p-4 flex justify-center">
+              {preview.image ? (
+                <div className="relative">
+                  <img
+                    src={preview.image}
+                    alt={`Pagina ${preview.pageNumber}`}
+                    className="max-w-[92vw] max-h-[calc(92vh-5rem)] w-auto h-auto bg-white rounded shadow-lg transition-transform duration-300"
+                    style={{ transform: rotationTransform(preview.file.rotation, 0.78) }}
+                  />
+                  {preview.loading && (
+                    <div className="absolute inset-0 rounded bg-zinc-950/25 backdrop-blur-[1px] flex items-center justify-center">
+                      <div className="rounded-full bg-zinc-950/80 border border-zinc-700 p-2 text-indigo-300 shadow-lg">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : preview.loading ? (
+                <div className="h-96 min-w-80 flex flex-col items-center justify-center text-zinc-400">
+                  <Loader2 className="w-8 h-8 animate-spin mb-3 text-indigo-500" />
+                  <span className="text-sm">Carregando visualizacao...</span>
+                </div>
+              ) : (
+                <div className="h-96 min-w-80 flex flex-col items-center justify-center text-zinc-500">
+                  <FileText className="w-10 h-10 mb-3 opacity-50" />
+                  <span className="text-sm">Visualizacao indisponivel</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
