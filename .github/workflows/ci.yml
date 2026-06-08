@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - aprimoramento-padronizacao-telas
+  pull_request:
+    branches:
+      - master
+      - main
+
+jobs:
+  validate:
+    name: build-and-validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: app
+        run: npm run build
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: pip install -r desktop/requirements.txt
+
+      - name: Validate Python entrypoint
+        run: python -m py_compile desktop/main.py
